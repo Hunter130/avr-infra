@@ -35,11 +35,12 @@ services:
     container_name: avr-asterisk
     restart: always
     ports:
-      - 5038:5038
-      - 5060:5060
-      - 8088:8088
-      - 8089:8089
-      - 10000-10050:10000-10050/udp
+     - 5038:5038
+     - "5060:5060/tcp"
+     - "5060:5060/udp"
+     - 8088:8088
+     - 8089:8089
+     - "10000-10050:10000-10050/udp"
     volumes:
       - ./asterisk/conf/manager.conf:/etc/asterisk/my_manager.conf
       - ./asterisk/conf/pjsip.conf:/etc/asterisk/my_pjsip.conf

@@ -14,7 +14,7 @@ services:
       - avr
 
   avr-sts-gemini:
-    image: agentvoiceresponse/avr-sts-gemini
+    build: ./avr-sts-gemini
     platform: linux/x86_64
     container_name: avr-sts-gemini
     restart: always
@@ -23,8 +23,13 @@ services:
       - GEMINI_API_KEY=$GEMINI_API_KEY
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash-native-audio-preview-12-2025}
       - GEMINI_INSTRUCTIONS=${GEMINI_INSTRUCTIONS:-You are a helpful assistant}
+      - GEMINI_VOICE=${GEMINI_VOICE:-Puck}
       - GEMINI_THINKING_LEVEL=${GEMINI_THINKING_LEVEL:-MINIMAL}
       - GEMINI_THINKING_BUDGET=${GEMINI_THINKING_BUDGET:-0}
+      - N8N_WEBHOOK_URL=$N8N_WEBHOOK_URL
+      - POST_CALL_ANALYSIS_PROVIDER=$POST_CALL_ANALYSIS_PROVIDER
+      - DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY
+      - DEEPGRAM_API_KEY=$DEEPGRAM_API_KEY
       - AMI_URL=${AMI_URL:-http://avr-ami:6006}
     # volumes: # uncomment if you want to use the custom tools
     #   - ./tools:/usr/src/app/tools
@@ -38,10 +43,11 @@ services:
     restart: always
     ports:
       - 5038:5038
-      - 5060:5060
+      - "5060:5060/tcp"
+      - "5060:5060/udp"
       - 8088:8088
       - 8089:8089
-      - 10000-10050:10000-10050/udp
+      - "10000-10050:10000-10050/udp"
     volumes:
       - ./asterisk/conf/manager.conf:/etc/asterisk/my_manager.conf
       - ./asterisk/conf/pjsip.conf:/etc/asterisk/my_pjsip.conf
