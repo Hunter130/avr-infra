@@ -1,0 +1,21 @@
+; === Agent: {{agentId}} ===
+[{{sipUsername}}]
+type=endpoint
+transport=transport-udp
+context={{skill}}
+disallow=all
+allow=ulaw
+auth={{sipUsername}}-auth
+aors={{sipUsername}}-aor
+
+[{{sipUsername}}-auth]
+type=auth
+auth_type=userpass
+username={{sipUsername}}
+password={{sipPassword}}
+
+[{{sipUsername}}-aor]
+type=aor
+max_contacts=2
+qualify_frequency=30
+

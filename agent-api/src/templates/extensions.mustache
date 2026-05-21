@@ -1,0 +1,6 @@
+; agent:{{agentId}}
+exten => {{extensionNumber}},1,NoOp(Call for agent {{agentId}} skill={{skill}})
+ same => n,Set(AGENT_ID={{agentId}})
+ same => n,Queue({{skill}}-queue)
+ same => n,Hangup()
+

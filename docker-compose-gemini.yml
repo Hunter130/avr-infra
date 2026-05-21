@@ -31,6 +31,8 @@ services:
       - DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY
       - DEEPGRAM_API_KEY=$DEEPGRAM_API_KEY
       - AMI_URL=${AMI_URL:-http://avr-ami:6006}
+    env_file:
+      - agents.env
     # volumes: # uncomment if you want to use the custom tools
     #   - ./tools:/usr/src/app/tools
     networks:
@@ -54,6 +56,7 @@ services:
       - ./asterisk/conf/extensions.conf:/etc/asterisk/my_extensions.conf
       - ./asterisk/conf/queues.conf:/etc/asterisk/my_queues.conf
       - ./asterisk/conf/ari.conf:/etc/asterisk/my_ari.conf
+      - ./asterisk_dynamic:/etc/asterisk/dynamic
     networks:
       - avr
 
@@ -70,6 +73,36 @@ services:
       - AMI_PASSWORD=${AMI_PASSWORD:-avr}
     ports:
       - 6006:6006
+    networks:
+      - avr
+
+  agent-api:
+    build: ./agent-api
+    platform: linux/x86_64
+    container_name: agent-api
+    restart: always
+    environment:
+      - SUPABASE_URL=$SUPABASE_URL
+      - SUPABASE_KEY=$SUPABASE_KEY
+      - API_KEY=$API_KEY
+      - DYNAMIC_CONF_DIR=/etc/asterisk/dynamic
+      - AGENTS_ENV_FILE=/app/agents.env
+      - COMPOSE_FILE=docker-compose-gemini.yml
+      - COMPOSE_DIR=/infra
+      - ASTERISK_CONTAINER=avr-asterisk
+    volumes:
+      - ./asterisk_dynamic:/etc/asterisk/dynamic
+      - ./agents.env:/app/agents.env
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/infra
+    ports:
+      - "3000:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agent-api.rule=Host(`api.roda-ia.com`)"
+      - "traefik.http.routers.agent-api.entrypoints=websecure"
+      - "traefik.http.routers.agent-api.tls=true"
+      - "traefik.http.services.agent-api.loadbalancer.server.port=3000"
     networks:
       - avr
 

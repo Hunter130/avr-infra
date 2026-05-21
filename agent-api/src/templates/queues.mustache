@@ -1,0 +1,10 @@
+; queue:{{skill}}
+[{{skill}}-queue]
+musicclass=default
+strategy=rrmemory
+timeout=30
+retry=5
+wrapup_time=5
+maxlen=20
+member => PJSIP/{{sipUsername}}
+
