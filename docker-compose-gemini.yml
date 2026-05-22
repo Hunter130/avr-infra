@@ -21,6 +21,8 @@ services:
     environment:
       - PORT=6037
       - GEMINI_API_KEY=$GEMINI_API_KEY
+      - SUPABASE_URL=$SUPABASE_URL
+      - SUPABASE_KEY=$SUPABASE_KEY
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash-native-audio-preview-12-2025}
       - GEMINI_INSTRUCTIONS=${GEMINI_INSTRUCTIONS:-You are a helpful assistant}
       - GEMINI_VOICE=${GEMINI_VOICE:-Puck}
@@ -31,10 +33,15 @@ services:
       - DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY
       - DEEPGRAM_API_KEY=$DEEPGRAM_API_KEY
       - AMI_URL=${AMI_URL:-http://avr-ami:6006}
+      - GEMINI_VAD_START_SENSITIVITY=${GEMINI_VAD_START_SENSITIVITY:-START_SENSITIVITY_HIGH}
+      - GEMINI_VAD_END_SENSITIVITY=${GEMINI_VAD_END_SENSITIVITY:-END_SENSITIVITY_LOW}
+      - GEMINI_VAD_SILENCE_DURATION_MS=${GEMINI_VAD_SILENCE_DURATION_MS:-500}
+      - GEMINI_VAD_PREFIX_PADDING_MS=${GEMINI_VAD_PREFIX_PADDING_MS:-200}
     env_file:
       - agents.env
-    # volumes: # uncomment if you want to use the custom tools
-    #   - ./tools:/usr/src/app/tools
+    volumes:
+      - ./recordings:/usr/src/app/recordings
+      - .env:/usr/src/app/.env
     networks:
       - avr
 

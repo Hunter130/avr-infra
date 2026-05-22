@@ -57,6 +57,27 @@ function upsertBlock(filePath, tag, newBlock) {
   fs.writeFileSync(filePath, content);
 }
 
+/**
+ * Writes extension entries into a single [demo] context block.
+ * The file always starts with [demo] and each agent has a tagged sub-block.
+ */
+function upsertExtensionBlock(filePath, tag, extLines) {
+  ensureDir(path.dirname(filePath));
+  let content = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : "[demo]\n";
+  // Ensure [demo] header exists
+  if (!content.startsWith("[demo]")) content = "[demo]\n" + content;
+  const startTag = `; BEGIN:${tag}\n`;
+  const endTag   = `; END:${tag}\n`;
+  const startIdx = content.indexOf(startTag);
+  const endIdx   = content.indexOf(endTag);
+  if (startIdx !== -1 && endIdx !== -1) {
+    content = content.slice(0, startIdx) + startTag + extLines + endTag + content.slice(endIdx + endTag.length);
+  } else {
+    content += `\n${startTag}${extLines}${endTag}`;
+  }
+  fs.writeFileSync(filePath, content);
+}
+
 /** Removes a tagged block from a file */
 function removeBlock(filePath, tag) {
   if (!fs.existsSync(filePath)) return;
@@ -92,7 +113,7 @@ function upsertAgentEnv(agentId, vars) {
 function reloadAsterisk() {
   try {
     execSync(`docker exec ${ASTERISK_CONTAINER} asterisk -rx "pjsip reload"`);
-    execSync(`docker exec ${ASTERISK_CONTAINER} asterisk -rx "dialplan reload"`);
+    execSync(`docker exec ${ASTERISK_CONTAINER} asterisk -rx "module reload pbx_config"`);
     execSync(`docker exec ${ASTERISK_CONTAINER} asterisk -rx "queue reload all"`);
     console.log("Asterisk reloaded");
   } catch (e) {
@@ -156,12 +177,18 @@ app.post("/agents/:agentId/extension", async (req, res) => {
     agentId,
     Mustache.render(tpl.pjsip, view)
   );
-  upsertBlock(
+
+  // Extensions: strip [demo] from template output and use single-context writer
+  const extRendered = Mustache.render(tpl.extensions, view)
+    .split("\n")
+    .filter(l => !l.trim().startsWith("[demo]"))
+    .join("\n");
+  upsertExtensionBlock(
     path.join(DYNAMIC_DIR, "extensions_dynamic.conf"),
     agentId,
-    Mustache.render(tpl.extensions, view)
+    extRendered
   );
-  // Queues: append member if queue already exists, else create
+
   upsertBlock(
     path.join(DYNAMIC_DIR, "queues_dynamic.conf"),
     `${skill}_${agentId}`,
