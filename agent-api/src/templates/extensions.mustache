@@ -11,6 +11,7 @@ exten => {{extensionNumber}},1,NoOp(Agent {{agentId}} skill={{skill}})
   same => n,Set(JSON_BODY={"uuid":"${UUID}","payload":{"from":"${CALLERID(num)}","to":"${EXTEN}"}})
   same => n,Set(JSON_RESPONSE=${CURL(http://avr-core:6001/call,${JSON_BODY})})
   same => n,Set(DENOISE(rx)=on)
+  same => n,MixMonitor(${UUID}.wav)
   same => n,Dial(AudioSocket/avr-core:5001/${UUID})
   same => n,Hangup()
 

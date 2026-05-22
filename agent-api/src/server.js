@@ -286,6 +286,39 @@ app.delete("/agents/:agentId/extension", async (req, res) => {
   return res.json({ success: true, agentId, message: "Extension removed" });
 });
 
+// ─── Outbound Calling ──────────────────────────────────────────────────────
+/**
+ * POST /agents/:agentId/call
+ * Originates an outbound call to a specified phone number and connects it to the agent's extension.
+ */
+app.post("/agents/:agentId/call", async (req, res) => {
+  const { agentId } = req.params;
+  const { phoneNumber, extension } = req.body;
+
+  if (!phoneNumber) {
+    return res.status(400).json({ error: "Missing phoneNumber in request body" });
+  }
+
+  if (!extension) {
+    return res.status(400).json({ error: "Missing extension in request body" });
+  }
+
+  try {
+    const cmd = `docker exec -d ${ASTERISK_CONTAINER} asterisk -rx "channel originate Local/${phoneNumber}@outbound-vonage extension ${extension}@demo"`;
+    execSync(cmd);
+    
+    return res.status(202).json({
+      success: true,
+      message: "Call originated successfully",
+      phoneNumber,
+      extension
+    });
+  } catch (e) {
+    console.error("Error originating call:", e.message);
+    return res.status(500).json({ error: "Failed to originate call", details: e.message });
+  }
+});
+
 // ─── Health check ──────────────────────────────────────────────────────────
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
