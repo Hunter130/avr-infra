@@ -304,7 +304,7 @@ app.post("/agents/:agentId/call", async (req, res) => {
   }
 
   try {
-    const cmd = `docker exec -d ${ASTERISK_CONTAINER} asterisk -rx "channel originate Local/${phoneNumber}@outbound-vonage extension ${extension}@demo"`;
+    const cmd = `docker exec -d ${ASTERISK_CONTAINER} asterisk -rx "channel originate Local/${phoneNumber}@outbound-vonage extension ${extension}@demo variable CALL_DIRECTION=outbound"`;
     execSync(cmd);
     
     return res.status(202).json({
