@@ -207,6 +207,16 @@ app.post("/agents/:agentId/extension", async (req, res) => {
     SIP_USERNAME:       sipUsername,
   });
 
+  // 4.5 Update extension_number in Supabase
+  const { error: updateError } = await supabase
+    .from(TABLE_NAME)
+    .update({ extension_number: extensionNumber })
+    .eq("id", agentId);
+
+  if (updateError) {
+    console.error(`[POST] Failed to update extension_number for agent ${agentId}:`, updateError.message);
+  }
+
   // 5. Reload Asterisk & Gemini
   reloadAsterisk();
   reloadGemini();
