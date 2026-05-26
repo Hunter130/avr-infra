@@ -1,0 +1,7 @@
+[0mPBX UUID: cf6497bf-42b8-428f-8df2-161d9c3fb832
+[May 25 01:19:39] [1;33mNOTICE[0m[1]: [1;37mloader.c[0m:[1;37m2568[0m [1;37mload_modules[0m: 224 modules will be loaded.
+[May 25 01:19:39] [1;33mNOTICE[0m[1]: [1;37mcdr.c[0m:[1;37m4656[0m [1;37mcdr_toggle_runtime_options[0m: CDR simple logging enabled.
+[May 25 01:19:40] [1;33mNOTICE[0m[1]: [1;37mindications.c[0m:[1;37m1100[0m [1;37mload_indications[0m: Default country for indication tones: us
+[May 25 01:19:40] [1;33mNOTICE[0m[1]: [1;37mindications.c[0m:[1;37m424[0m [1;37mast_set_indication_country[0m: Setting default indication country to 'us'
+[May 25 01:19:40] [1;31mWARNING[0m[1]: [1;37mpbx.c[0m:[1;37m8776[0m [1;37mast_context_verify_includes[0m: Context 'local' tries to include nonexistent context 'parkedcalls'
+[1;32mAsterisk Ready.[0m
