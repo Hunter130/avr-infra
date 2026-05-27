@@ -299,9 +299,9 @@ app.delete("/agents/:agentId/extension", async (req, res) => {
 // ─── Outbound Calling ──────────────────────────────────────────────────────
 app.post("/agents/:agentId/call", async (req, res) => {
   const { agentId } = req.params;
-  const { phoneNumber, extension, callerId } = req.body;
+  const { phoneNumber, extension, callerId, intento_seguimiento, historial_contexto, name } = req.body;
 
-  console.log(`[Call Originate] Agent ID: ${agentId}, Phone Number: ${phoneNumber}, Extension: ${extension}, Caller ID: ${callerId}`);
+  console.log(`[Call Originate] Agent ID: ${agentId}, Phone Number: ${phoneNumber}, Extension: ${extension}, Caller ID: ${callerId}, Name: ${name}, Intento: ${intento_seguimiento}, Context: ${historial_contexto}`);
 
   if (!phoneNumber) {
     return res.status(400).json({ error: "Missing phoneNumber in request body" });
@@ -313,6 +313,31 @@ app.post("/agents/:agentId/call", async (req, res) => {
 
   try {
     const finalCallerId = callerId || "525593178271";
+
+    // Register call metadata on avr-sts-gemini
+    try {
+      const registerRes = await fetch("http://avr-sts-gemini:6037/register-call", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber,
+          agentId,
+          direction: "outbound",
+          customerName: name || "",
+          followupAttempt: intento_seguimiento || "",
+          contextHistory: historial_contexto || ""
+        })
+      });
+      if (!registerRes.ok) {
+        console.warn(`Failed to register call metadata on avr-sts-gemini: status ${registerRes.status}`);
+      } else {
+        const registerData = await registerRes.json();
+        console.log("Successfully registered call metadata on avr-sts-gemini:", registerData);
+      }
+    } catch (err) {
+      console.error("Error registering call metadata on avr-sts-gemini:", err.message);
+    }
+
     const dialString = `${finalCallerId}*${phoneNumber}`;
     const cmd = `docker exec -d ${ASTERISK_CONTAINER} asterisk -rx "channel originate Local/${dialString}@outbound-vonage extension ${extension}@demo variable __CALL_DIRECTION=outbound variable __CUSTOMER_NUMBER=${phoneNumber} variable __OUTBOUND_CALLERID=${finalCallerId}"`;
     execSync(cmd);
@@ -322,7 +347,10 @@ app.post("/agents/:agentId/call", async (req, res) => {
       message: "Call originated successfully",
       phoneNumber,
       extension,
-      callerId: finalCallerId
+      callerId: finalCallerId,
+      name: name || null,
+      intento_seguimiento: intento_seguimiento || null,
+      historial_contexto: historial_contexto || null
     });
   } catch (e) {
     console.error("Error originating call:", e.message);
