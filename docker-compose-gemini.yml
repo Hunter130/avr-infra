@@ -105,6 +105,7 @@ services:
       - ./agents.env:/app/agents.env
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/infra
+      - ./agent-api/src:/app/src
     ports:
       - "3000:3000"
     labels:

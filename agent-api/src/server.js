@@ -297,13 +297,11 @@ app.delete("/agents/:agentId/extension", async (req, res) => {
 });
 
 // ─── Outbound Calling ──────────────────────────────────────────────────────
-/**
- * POST /agents/:agentId/call
- * Originates an outbound call to a specified phone number and connects it to the agent's extension.
- */
 app.post("/agents/:agentId/call", async (req, res) => {
   const { agentId } = req.params;
-  const { phoneNumber, extension } = req.body;
+  const { phoneNumber, extension, callerId } = req.body;
+
+  console.log(`[Call Originate] Agent ID: ${agentId}, Phone Number: ${phoneNumber}, Extension: ${extension}, Caller ID: ${callerId}`);
 
   if (!phoneNumber) {
     return res.status(400).json({ error: "Missing phoneNumber in request body" });
@@ -314,14 +312,17 @@ app.post("/agents/:agentId/call", async (req, res) => {
   }
 
   try {
-    const cmd = `docker exec -d ${ASTERISK_CONTAINER} asterisk -rx "channel originate Local/${phoneNumber}@outbound-vonage extension ${extension}@demo variable __CALL_DIRECTION=outbound variable __CUSTOMER_NUMBER=${phoneNumber}"`;
+    const finalCallerId = callerId || "525593178271";
+    const dialString = `${finalCallerId}*${phoneNumber}`;
+    const cmd = `docker exec -d ${ASTERISK_CONTAINER} asterisk -rx "channel originate Local/${dialString}@outbound-vonage extension ${extension}@demo variable __CALL_DIRECTION=outbound variable __CUSTOMER_NUMBER=${phoneNumber} variable __OUTBOUND_CALLERID=${finalCallerId}"`;
     execSync(cmd);
     
     return res.status(202).json({
       success: true,
       message: "Call originated successfully",
       phoneNumber,
-      extension
+      extension,
+      callerId: finalCallerId
     });
   } catch (e) {
     console.error("Error originating call:", e.message);
