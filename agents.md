@@ -30,6 +30,14 @@ Puedes invocar a estos subagentes para resolver problemas específicos utilizand
 - **Herramientas:** Solo lectura (explorar directorios, ver archivos, búsquedas web).
 - **Cuándo invocarlo:** Cuando necesites entender una API externa, buscar un bug en los logs sin gastar contexto principal o entender cómo se conecta un servicio en particular.
 
+## Habilidades Especiales (Skills)
+
+### 1. Comando `deployemos` (Auto-Commit)
+- **Activador:** El uso de la palabra clave `"deployemos"` en el chat.
+- **Propósito:** Automatizar la creación de commits locales en `main` bajo demanda.
+- **Funcionamiento:** El agente inspeccionará `git status`, mostrará los cambios, propondrá un mensaje de commit, esperará la confirmación del usuario y realizará el commit local. Luego indicará al usuario cómo hacer el `git push`.
+- **Instrucciones completas:** Ver detalles en [deploy.md](file:///Users/hunter/Documents/Dockers/Containers/avr-infra/skills/deploy.md).
+
 ## ¿Cómo trabajar con esta estructura?
 
 1. **Mantén el hilo principal limpio:** Usa el agente principal (Antigravity) como orquestador.
