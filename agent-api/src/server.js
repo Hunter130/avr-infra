@@ -338,7 +338,7 @@ app.post("/agents/:agentId/call", async (req, res) => {
       console.error("Error registering call metadata on avr-sts-gemini:", err.message);
     }
 
-    const dialString = `${finalCallerId}*${phoneNumber}`;
+    const dialString = `${finalCallerId}*${phoneNumber}*${agentId}`;
     const cmd = `docker exec -d ${ASTERISK_CONTAINER} asterisk -rx "channel originate Local/${dialString}@outbound-vonage extension ${extension}@demo variable __CALL_DIRECTION=outbound variable __CUSTOMER_NUMBER=${phoneNumber} variable __OUTBOUND_CALLERID=${finalCallerId}"`;
     execSync(cmd);
     
