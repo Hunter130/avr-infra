@@ -47,6 +47,12 @@ services:
       - 6038:6037
     networks:
       - avr
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.avr-sts-gemini.rule=Host(`grabaciones.sip.rodaia.com`)"
+      - "traefik.http.routers.avr-sts-gemini.entrypoints=websecure"
+      - "traefik.http.routers.avr-sts-gemini.tls=true"
+      - "traefik.http.services.avr-sts-gemini.loadbalancer.server.port=6037"
 
   avr-asterisk:
     image: agentvoiceresponse/avr-asterisk
