@@ -35,7 +35,7 @@ module.exports = {
           "Content-Type": "application/json",
           "X-AVR-UUID": uuid
         },
-        timeout: 4000 // 4-second timeout limit to avoid blocking the voice session
+        timeout: 8000 // 8-second timeout limit to accommodate cold starts and vector search latency
       });
 
       if (response.data && response.data.result) {
