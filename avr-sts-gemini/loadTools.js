@@ -17,6 +17,15 @@ async function loadTools(allowedToolsIds = []) {
   let allTools = [];
   
   // Helper function to load tools from a directory
+  // Gemini 3.1 requires parameters to have at least {type: "object", properties: {}}
+  // An empty {} will cause: "model output must contain either output text or tool calls"
+  const sanitizeParameters = (params) => {
+    if (!params || typeof params !== 'object' || Object.keys(params).length === 0) {
+      return { type: "object", properties: {} };
+    }
+    return params;
+  };
+
   const loadToolsFromDir = (dirPath) => {
     if (!fs.existsSync(dirPath)) return [];
     
@@ -26,7 +35,7 @@ async function loadTools(allowedToolsIds = []) {
         return {
           name: tool.name,
           description: tool.description || '',
-          parameters: tool.input_schema || {},
+          parameters: sanitizeParameters(tool.input_schema),
         };
       });
   };
@@ -63,7 +72,12 @@ async function loadTools(allowedToolsIds = []) {
             
             // Only add to allTools if the agent is allowed to use it
             if (allowedToolsIds && allowedToolsIds.includes(st.id)) {
-              allTools.push(st.schema);
+              // Sanitize Supabase tool schema parameters too
+              const sanitizedSchema = {
+                ...st.schema,
+                parameters: sanitizeParameters(st.schema?.parameters)
+              };
+              allTools.push(sanitizedSchema);
             }
           }
         }
