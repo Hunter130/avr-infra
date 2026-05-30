@@ -24,25 +24,33 @@ Puedes invocar a estos subagentes para resolver problemas específicos utilizand
 - **Herramientas:** Edición de archivos ycomandos para interactuar con Docker y Docker Compose.
 - **Cuándo invocarlo:** Agregar nuevos servicios de AI (nuevos proveedores STT/TTS), problemas de volúmenes, puertos, o variables de entorno.
 
-### 4. `research`
+### 4. `gemini-sts-developer`
+- **Rol:** Especialista en Gemini Live, STS y Conectividad con Google.
+- **Propósito:** Optimizar y configurar el servicio `avr-sts-gemini`, controlando la velocidad de respuesta (latencia), la calidad de la llamada, el flujo de audio en tiempo real y la configuración fina de herramientas (tools) y directivas de contexto.
+- **Herramientas:** Edición de archivos (Node.js, WebSockets, esquemas JSON), pruebas de latencia y configuración de la API de Google GenAI.
+- **Cuándo invocarlo:** Cambios en el conector de Gemini Live, optimización de parámetros de voz (sensibilidad, voces, thinking mode), depuración de latencia en la llamada, y modificación/creación de tools del bot de voz.
+- **Instrucciones completas:** Ver detalles en [gemini-sts-developer.md](file:///Users/hunter/Documents/Dockers/Containers/avr-infra/skills/gemini-sts-developer.md).
+
+### 5. `research`
 - **Rol:** Investigador de contexto (Viene por defecto).
 - **Propósito:** Realizar búsquedas exhaustivas en el código base, explorar dependencias, examinar logs o buscar en la web.
 - **Herramientas:** Solo lectura (explorar directorios, ver archivos, búsquedas web).
 - **Cuándo invocarlo:** Cuando necesites entender una API externa, buscar un bug en los logs sin gastar contexto principal o entender cómo se conecta un servicio en particular.
 
-### 5. `git-developer`
+### 6. `git-developer`
 - **Rol:** Especialista en Git y Control de Versiones.
 - **Propósito:** Encargado exclusivo de revisar cambios (`git status` / `git diff`), realizar commits estructurados y hacer `git push` a la rama `dev`.
 - **Herramientas:** Comandos de Git e inspección de estado del repositorio.
 - **Cuándo invocarlo:** Al finalizar cambios en cualquier componente para subirlos de manera segura a la rama `dev`.
 - **Instrucciones completas:** Ver detalles en [git-developer.md](file:///Users/hunter/Documents/Dockers/Containers/avr-infra/skills/git-developer.md).
 
-### 6. `git-merger`
+### 7. `git-merger`
 - **Rol:** Especialista en Fusión y Despliegue de Control de Versiones.
 - **Propósito:** Fusionar cambios de la rama `dev` a la rama principal (`main`) y realizar el push correspondiente de manera segura.
 - **Herramientas:** Comandos de Git e inspección de estado del repositorio.
 - **Cuándo invocarlo:** Cuando el desarrollo en `dev` sea estable y se requiera pasar los cambios a `main` para prepararlos para producción.
 - **Instrucciones completas:** Ver detalles en [git-merger.md](file:///Users/hunter/Documents/Dockers/Containers/avr-infra/skills/git-merger.md).
+
 
 ## ¿Cómo trabajar con esta estructura?
 
