@@ -37,8 +37,8 @@ El subagente debe seguir estrictamente estos pasos:
      `git checkout dev`
 
 7. **Recordatorio del Comando en el Servidor**:
-   - Recordar explícitamente al usuario los comandos que debe ejecutar en el servidor de producción para aplicar la actualización:
+   - Recordar explícitamente al usuario los comandos que debe ejecutar en el servidor de producción para detener, reconstruir e iniciar el entorno:
      ```bash
-     git pull origin main && docker compose pull && docker compose up -d
+     git pull origin main && docker compose -f docker-compose-gemini.yml down && docker compose -f docker-compose-gemini.yml up -d --build
      ```
-     (o alternativamente usando npm: `git pull origin main && npm run dc:pull && npm run dc:up`)
+
