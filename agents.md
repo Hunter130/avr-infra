@@ -37,6 +37,13 @@ Puedes invocar a estos subagentes para resolver problemas específicos utilizand
 - **Cuándo invocarlo:** Al finalizar cambios en cualquier componente para subirlos de manera segura a la rama `dev`.
 - **Instrucciones completas:** Ver detalles en [git-developer.md](file:///Users/hunter/Documents/Dockers/Containers/avr-infra/skills/git-developer.md).
 
+### 6. `git-merger`
+- **Rol:** Especialista en Fusión y Despliegue de Control de Versiones.
+- **Propósito:** Fusionar cambios de la rama `dev` a la rama principal (`main`) y realizar el push correspondiente de manera segura.
+- **Herramientas:** Comandos de Git e inspección de estado del repositorio.
+- **Cuándo invocarlo:** Cuando el desarrollo en `dev` sea estable y se requiera pasar los cambios a `main` para prepararlos para producción.
+- **Instrucciones completas:** Ver detalles en [git-merger.md](file:///Users/hunter/Documents/Dockers/Containers/avr-infra/skills/git-merger.md).
+
 ## ¿Cómo trabajar con esta estructura?
 
 1. **Mantén el hilo principal limpio:** Usa el agente principal (Antigravity) como orquestador.
@@ -44,6 +51,7 @@ Puedes invocar a estos subagentes para resolver problemas específicos utilizand
 3. **Espera la respuesta:** El subagente realizará el trabajo en segundo plano y reportará cuando termine.
 4. **Verifica:** Usa herramientas o un subagente (como `research`) para revisar que los cambios no rompan otras integraciones.
 5. **Sube tus cambios:** Delega al subagente `git-developer` para realizar el commit y push de tus modificaciones a la rama `dev`.
+6. **Lanza a main/producción:** Delega al subagente `git-merger` para fusionar de `dev` a `main` cuando todo esté listo para producción.
 
 ---
 *Esta estructura ha sido diseñada para optimizar los tokens (context context-saving) permitiéndote avanzar más rápido en los requerimientos del proyecto de AVR.*
