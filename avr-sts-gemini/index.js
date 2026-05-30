@@ -423,6 +423,8 @@ const handleClientConnection = (clientWs, reqUrl) => {
 
   // Initialize Gemini connection
   const initializeGeminiConnection = async () => {
+    let lastTranscriptionText = "";
+    let lastTranscriptionTime = 0;
     try {
       session = await connectToGeminiSdk(sessionUuid, {
         onopen: function () {
@@ -430,8 +432,16 @@ const handleClientConnection = (clientWs, reqUrl) => {
         },
         onmessage: async function (message) {
           if (message.serverContent?.outputTranscription) {
-            conversationLog.push(`Gemini: ${message.serverContent.outputTranscription.text}`);
-            console.log("Gemini Output Transcription:", message.serverContent.outputTranscription.text);
+            const text = message.serverContent.outputTranscription.text;
+            // Deduplicate fast consecutive identical chunks
+            if (text === lastTranscriptionText && (Date.now() - lastTranscriptionTime) < 1000) {
+              return;
+            }
+            lastTranscriptionText = text;
+            lastTranscriptionTime = Date.now();
+
+            conversationLog.push(`Gemini: ${text}`);
+            console.log("Gemini Output Transcription:", text);
           }
           if (message.serverContent?.modelTurn?.parts) {
             const part = message.serverContent?.modelTurn?.parts?.[0];
@@ -483,7 +493,13 @@ const handleClientConnection = (clientWs, reqUrl) => {
                 obj.response.result = `I'm sorry, I cannot retrieve the requested information.`;
                 functionResponses.push(obj);
               } else {
-                obj.response.result = await handler(sessionUuid, fc.args);
+                obj.response.result = await handler(sessionUuid, fc.args, {
+                  customerNumber,
+                  agentId,
+                  customerName,
+                  followupAttempt,
+                  contextHistory
+                });
                 functionResponses.push(obj);
               }
               console.log("Gemini Session Tool Response:", obj.response.result);

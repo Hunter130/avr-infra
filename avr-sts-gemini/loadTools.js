@@ -91,7 +91,7 @@ function getToolHandler(name) {
   // Check if it's a Supabase tool
   if (supabaseToolsCache.has(name)) {
     const toolConfig = supabaseToolsCache.get(name);
-    return async (sessionUuid, args) => {
+    return async (sessionUuid, args, context) => {
       try {
         if (toolConfig.type === 'transfer') {
           console.log(`Executing Supabase tool: ${name} as TRANSFER to ${toolConfig.config.target_number}`);
@@ -135,10 +135,22 @@ function getToolHandler(name) {
           return typeof response.data === 'object' ? JSON.stringify(response.data) : String(response.data);
         }
 
-        console.log(`Executing Supabase tool: ${name} with URL ${toolConfig.config.url}`);
+        let url = toolConfig.config.url || "";
+        const resolvedCustomerNumber = context?.customerNumber || args?.customerNumber || '';
+        const resolvedAgentId = context?.agentId || args?.assistantId || args?.agentId || '';
+
+        url = url.replace(/\{\{customer\.number\}\}/g, resolvedCustomerNumber)
+                 .replace(/\{\{customerNumber\}\}/g, resolvedCustomerNumber)
+                 .replace(/\{\{customer_number\}\}/g, resolvedCustomerNumber)
+                 .replace(/\{\{assistant\.id\}\}/g, resolvedAgentId)
+                 .replace(/\{\{assistantId\}\}/g, resolvedAgentId)
+                 .replace(/\{\{agent_id\}\}/g, resolvedAgentId)
+                 .replace(/\{\{agentId\}\}/g, resolvedAgentId);
+
+        console.log(`Executing Supabase tool: ${name} with resolved URL: ${url}`);
         const response = await axios({
           method: toolConfig.config.method || 'POST',
-          url: toolConfig.config.url,
+          url: url,
           data: args,
           headers: {
             'Content-Type': 'application/json',

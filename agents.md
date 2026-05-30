@@ -30,13 +30,12 @@ Puedes invocar a estos subagentes para resolver problemas específicos utilizand
 - **Herramientas:** Solo lectura (explorar directorios, ver archivos, búsquedas web).
 - **Cuándo invocarlo:** Cuando necesites entender una API externa, buscar un bug en los logs sin gastar contexto principal o entender cómo se conecta un servicio en particular.
 
-## Habilidades Especiales (Skills)
-
-### 1. Comando `deployemos` (Auto-Commit)
-- **Activador:** El uso de la palabra clave `"deployemos"` en el chat.
-- **Propósito:** Automatizar la creación de commits locales en `main` bajo demanda.
-- **Funcionamiento:** El agente inspeccionará `git status`, mostrará los cambios, propondrá un mensaje de commit, esperará la confirmación del usuario y realizará el commit local. Luego indicará al usuario cómo hacer el `git push`.
-- **Instrucciones completas:** Ver detalles en [deploy.md](file:///Users/hunter/Documents/Dockers/Containers/avr-infra/skills/deploy.md).
+### 5. `git-developer`
+- **Rol:** Especialista en Git y Control de Versiones.
+- **Propósito:** Encargado exclusivo de revisar cambios (`git status` / `git diff`), realizar commits estructurados y hacer `git push` a la rama `dev`.
+- **Herramientas:** Comandos de Git e inspección de estado del repositorio.
+- **Cuándo invocarlo:** Al finalizar cambios en cualquier componente para subirlos de manera segura a la rama `dev`.
+- **Instrucciones completas:** Ver detalles en [git-developer.md](file:///Users/hunter/Documents/Dockers/Containers/avr-infra/skills/git-developer.md).
 
 ## ¿Cómo trabajar con esta estructura?
 
@@ -44,6 +43,7 @@ Puedes invocar a estos subagentes para resolver problemas específicos utilizand
 2. **Delega:** Si el usuario pide un cambio complejo en el API, invoca a `api-developer`.
 3. **Espera la respuesta:** El subagente realizará el trabajo en segundo plano y reportará cuando termine.
 4. **Verifica:** Usa herramientas o un subagente (como `research`) para revisar que los cambios no rompan otras integraciones.
+5. **Sube tus cambios:** Delega al subagente `git-developer` para realizar el commit y push de tus modificaciones a la rama `dev`.
 
 ---
 *Esta estructura ha sido diseñada para optimizar los tokens (context context-saving) permitiéndote avanzar más rápido en los requerimientos del proyecto de AVR.*
