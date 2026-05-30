@@ -6,21 +6,30 @@ Este subagente está especializado en el desarrollo, optimización, configuraci�
 
 ## 🎯 Enfoque y Responsabilidades
 
-### 1. Optimización de Latencia y Velocidad
+### 1. Arquitectura Dinámica y Supabase (`agentesID_Roda_IA`)
+- **Configuración 100% Dinámica**: Todo parámetro de voz, prompt de sistema, costos de proveedores, y herramientas debe ser recuperado dinámicamente de la tabla `agentesID_Roda_IA` de Supabase. El frontend es donde se crean y configuran los agentes y herramientas.
+- **Razón sobre Datos Reales**: Diseñar componentes considerando que la base de datos es la única fuente de verdad. No asumas configuraciones estáticas ni tools hardcodeadas si pueden ser administradas en el registro del agente.
+
+### 2. Optimización de Latencia y Velocidad
 - **Contextos Compactos**: Mantener los contextos y directivas del sistema (System Instructions) limpios, estructurados y libres de redundancias para reducir el TTFT (Time to First Token).
 - **Control de Tools (Function Calling)**: Limitar y optimizar la cantidad de herramientas enviadas en la configuración de la sesión de Gemini Live. Más herramientas aumentan la latencia de procesamiento.
 - **Respuestas Rápidas**: Diseñar prompts que guíen al modelo a ser conciso, directo y conversacional en llamadas telefónicas, evitando respuestas tipo ensayo.
 - **Optimización de Audio**: Cuidar que el envío y recepción de paquetes de audio (generalmente Linear16 de 8kHz o 16kHz) coincida con los buffers de Asterisk/Audiosocket, evitando acumulaciones de lag o buffering excesivo.
 
-### 2. Calidad de Voz y Audio
+### 3. Calidad de Voz y Audio
 - **Configuración de Voces**: Configurar la voz del agente (e.g., Puck, Charon, Aoede, Kore, Fenrir) según las preferencias de tono del cliente y el idioma principal.
 - **Sensibilidad de Interrupción (VAD)**: Configurar y verificar los parámetros de sensibilidad de inicio y fin de voz definidos en las variables de entorno del `.env` (`GEMINI_VAD_START_SENSITIVITY` y `GEMINI_VAD_END_SENSITIVITY`) para evitar falsas interrupciones o respuestas lentas.
 - **Manejo del Pensamiento (Thinking Level)**: Ajustar la modalidad de pensamiento del modelo para equilibrar la calidad de la respuesta con el costo en latencia (e.g., desactivar o minimizar el modo thinking en interacciones de respuesta rápida de voz).
 
-### 3. Gestión y Configuración de Tools
+### 4. Soporte RAG con Google File Search
+- **Búsqueda Grounded Nativa**: La plataforma de frontend ya sube los archivos de apoyo a **Google File Search** (RAG nativo de Google).
+- **Integración de Stores**: Recuperar el campo `file_search_store_names` de la base de datos e inyectarlo en la sesión de Gemini Live usando la tool nativa del SDK (`{ fileSearch: { fileSearchStoreNames: [...] } }`). Esto permite la consulta directa sin programar motores de búsqueda locales o handlers intermedios.
+
+### 5. Gestión y Configuración de Tools
 - **Declaraciones Precisas**: Asegurar que los esquemas JSON de las funciones (parámetros, descripciones, tipos) estén perfectamente definidos para evitar llamadas erróneas o reintentos del modelo.
 - **Manejo de Respuestas de Herramientas**: Implementar ejecuciones rápidas y asíncronas en los tool handlers, entregando una respuesta inmediata a Gemini para que reanude la generación de audio sin pausas largas incómodas para el cliente.
 - **Warm Transfers**: Cuidar que la transcripción/resumen generada para la transferencia sea breve, y optimizar la generación rápida del TTS (como Deepgram Aura-2) para asegurar un traspaso inmediato y sin fallas.
+
 
 ---
 

@@ -197,6 +197,22 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
     console.error(`Error loading tools for Gemini: ${error.message}`);
   }
 
+  if (agentOverrides.fileSearchStoreNames) {
+    let stores = [];
+    if (Array.isArray(agentOverrides.fileSearchStoreNames)) {
+      stores = agentOverrides.fileSearchStoreNames;
+    } else if (typeof agentOverrides.fileSearchStoreNames === "string") {
+      stores = agentOverrides.fileSearchStoreNames.split(",").map(s => s.trim()).filter(Boolean);
+    }
+    if (stores.length > 0) {
+      if (!config.tools) {
+        config.tools = [];
+      }
+      config.tools.push({ fileSearch: { fileSearchStoreNames: stores } });
+      console.log("Loaded Google File Search RAG stores:", stores);
+    }
+  }
+
   console.log("Gemini Session Config:", config);
   console.log("Gemini Session Model:", model);
 
@@ -351,6 +367,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
                   skill:         agent.skill                  || null,
                   structuredDataPlan: agent.structuredDataPlan || null,
                   toolsIds:      agent.tools_ids              || [],
+                  fileSearchStoreNames: agent.file_search_store_names || null,
                 };
                 console.log("Agent overrides loaded from Supabase:", agentOverrides);
               }
