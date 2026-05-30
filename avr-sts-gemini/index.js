@@ -191,8 +191,26 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
 
   try {
     const tools = await loadTools(agentOverrides.toolsIds || []);
-    config.tools = [{ functionDeclarations: tools }];
-    console.log(`Loaded ${tools.length} tools for Gemini:`, JSON.stringify(tools, null, 2));
+    if (tools.length > 0) {
+      config.tools = [{ functionDeclarations: tools }];
+      // AUTO mode: Gemini decides when to call tools but respects the system prompt.
+      // Do NOT use ANY here — it causes empty-output crashes in Gemini Live.
+      config.toolConfig = {
+        functionCallingConfig: { mode: "AUTO" }
+      };
+
+      // If avr_search_knowledge_base is available, force its use via a critical system instruction
+      const hasKnowledgeBase = tools.some(t => t.name === "avr_search_knowledge_base");
+      if (hasKnowledgeBase) {
+        const kbInstruction = `\n\n[REGLA CRÍTICA - BASE DE CONOCIMIENTOS]:\nTIENES PROHIBIDO responder por tu cuenta cualquier pregunta sobre políticas, procedimientos, horarios, precios, garantías, excepciones o cuando el cliente presente una objeción o duda específica sobre el servicio.\nEN ESTOS CASOS DEBES OBLIGATORIAMENTE llamar a la herramienta "avr_search_knowledge_base" ANTES de responder.\nNUNCA improvises ni uses tu conocimiento general para responder este tipo de preguntas. Llama a la herramienta primero, luego responde con la información que te devuelve.`;
+        config.systemInstruction += kbInstruction;
+        console.log("[avr_search_knowledge_base] Critical KB instruction appended to system prompt.");
+      }
+
+      console.log(`Loaded ${tools.length} tools for Gemini:`, JSON.stringify(tools, null, 2));
+    } else {
+      console.warn("No tools loaded for Gemini session.");
+    }
   } catch (error) {
     console.error(`Error loading tools for Gemini: ${error.message}`);
   }

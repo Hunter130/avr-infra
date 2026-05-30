@@ -30,14 +30,24 @@ async function loadTools(allowedToolsIds = []) {
     if (!fs.existsSync(dirPath)) return [];
     
     return fs.readdirSync(dirPath)
-      .map(file => {
-        const tool = require(path.join(dirPath, file));
-        return {
-          name: tool.name,
-          description: tool.description || '',
-          parameters: sanitizeParameters(tool.input_schema),
-        };
-      });
+      .filter(file => file.endsWith('.js'))  // Ignore .DS_Store and other non-JS files
+      .reduce((acc, file) => {
+        try {
+          const tool = require(path.join(dirPath, file));
+          if (!tool.name) {
+            console.warn(`[loadTools] Skipping file ${file}: missing 'name' field.`);
+            return acc;
+          }
+          acc.push({
+            name: tool.name,
+            description: tool.description || '',
+            parameters: sanitizeParameters(tool.input_schema),
+          });
+        } catch (err) {
+          console.error(`[loadTools] Error loading tool from ${file}:`, err.message);
+        }
+        return acc;
+      }, []);
   };
 
   // Load tools from both directories
