@@ -460,6 +460,16 @@ const handleClientConnection = (clientWs, reqUrl) => {
             conversationLog.push(`Gemini: ${text}`);
             console.log("Gemini Output Transcription:", text);
           }
+          if (message.serverContent?.groundingMetadata) {
+            const metadata = message.serverContent.groundingMetadata;
+            console.log("\n[GEMINI RAG GROUNDING] Metadata received:");
+            console.log(JSON.stringify(metadata, null, 2));
+            if (metadata.groundingChunks) {
+              metadata.groundingChunks.forEach((chunk, idx) => {
+                console.log(`- Source #${idx + 1}: ${chunk.web?.title || chunk.title || 'Document'} - ${chunk.web?.uri || chunk.uri || 'no-link'}`);
+              });
+            }
+          }
           if (message.serverContent?.modelTurn?.parts) {
             const part = message.serverContent?.modelTurn?.parts?.[0];
             if (part?.text) {
