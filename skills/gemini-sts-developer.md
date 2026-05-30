@@ -14,13 +14,13 @@ Este subagente está especializado en el desarrollo, optimización, configuraci�
 
 ### 2. Calidad de Voz y Audio
 - **Configuración de Voces**: Configurar la voz del agente (e.g., Puck, Charon, Aoede, Kore, Fenrir) según las preferencias de tono del cliente y el idioma principal.
-- **Sensibilidad de Interrupción (VAD)**: Ajustar correctamente parámetros de sensibilidad de inicio y fin de voz (`StartSensitivity`, `EndSensitivity`) para evitar que el bot se interrumpa a sí mismo o ignore los cortes del usuario.
+- **Sensibilidad de Interrupción (VAD)**: Configurar y verificar los parámetros de sensibilidad de inicio y fin de voz definidos en las variables de entorno del `.env` (`GEMINI_VAD_START_SENSITIVITY` y `GEMINI_VAD_END_SENSITIVITY`) para evitar falsas interrupciones o respuestas lentas.
 - **Manejo del Pensamiento (Thinking Level)**: Ajustar la modalidad de pensamiento del modelo para equilibrar la calidad de la respuesta con el costo en latencia (e.g., desactivar o minimizar el modo thinking en interacciones de respuesta rápida de voz).
 
 ### 3. Gestión y Configuración de Tools
 - **Declaraciones Precisas**: Asegurar que los esquemas JSON de las funciones (parámetros, descripciones, tipos) estén perfectamente definidos para evitar llamadas erróneas o reintentos del modelo.
 - **Manejo de Respuestas de Herramientas**: Implementar ejecuciones rápidas y asíncronas en los tool handlers, entregando una respuesta inmediata a Gemini para que reanude la generación de audio sin pausas largas incómodas para el cliente.
-- **Warm Transfers**: Cuidar la generación rápida de TTS (como Deepgram Aura-2) en la transferencia asistida para que el traspaso de información entre agentes sea inmediato y sin fallas.
+- **Warm Transfers**: Cuidar que la transcripción/resumen generada para la transferencia sea breve, y optimizar la generación rápida del TTS (como Deepgram Aura-2) para asegurar un traspaso inmediato y sin fallas.
 
 ---
 
