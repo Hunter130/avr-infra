@@ -41,7 +41,7 @@ console.log("Loaded VAD Config from process.env:", {
 
 // Audio resamplers are created per-connection to avoid state contamination in concurrent calls
 
-const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, sessionContext = {}) => {
+const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, sessionContext = {}, activeCacheId = null) => {
   const model =
     process.env.GEMINI_MODEL || "gemini-3.1-flash-live-preview";
 
@@ -89,132 +89,136 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
     }
   };
 
-  // Per-agent prompt takes highest priority, then global env vars
-  if (sessionPrompt) {
-    config.systemInstruction = sessionPrompt.replace(/\\n/g, "\n");
-    console.log("Using per-agent PROMPT override");
-  } else if (process.env.GEMINI_INSTRUCTIONS) {
-    config.systemInstruction = process.env.GEMINI_INSTRUCTIONS;
-    console.log("Using GEMINI_INSTRUCTIONS from environment variable");
-  } else if (process.env.GEMINI_URL_INSTRUCTIONS) {
-    try {
-      const response = await axios.get(process.env.GEMINI_URL_INSTRUCTIONS, {
-        headers: {
-          "Content-Type": "application/json",
-          "X-AVR-UUID": sessionUuid,
-        },
-      });
-      console.log("Instructions loaded from GEMINI_URL_INSTRUCTIONS");
-      const data = await response.data;
-      console.log(data);
-      config.systemInstruction = data.system;
-    } catch (error) {
-      console.error(
-        `Error loading instructions from ${process.env.GEMINI_URL_INSTRUCTIONS}: ${error.message}`
-      );
-    }
-  } else if (process.env.GEMINI_FILE_INSTRUCTIONS) {
-    try {
-      const data = await fsp.readFile(
-        process.env.GEMINI_FILE_INSTRUCTIONS,
-        "utf8"
-      );
-      console.log("Using GEMINI_FILE_INSTRUCTIONS from environment variable");
-      console.log(data);
-      config.systemInstruction = data;
-    } catch (error) {
-      console.error(
-        `Error loading instructions from ${process.env.GEMINI_FILE_INSTRUCTIONS}: ${error.message}`
-      );
-    }
+  if (activeCacheId) {
+    config.cachedContent = activeCacheId;
+    // Omit systemInstruction and tools from config when cachedContent is active
+    delete config.systemInstruction;
+    console.log("Configurando sesión Gemini Live con cachedContent (se omiten systemInstruction y tools)");
   } else {
-    console.log("Using default instructions");
-    config.systemInstruction = "You are a helpful assistant and answer in a friendly tone.";
-  }
-
-  // Inject Time Consciousness (America/Mexico_City timezone)
-  const horaMexico = new Date().toLocaleString("es-MX", { 
-    timeZone: "America/Mexico_City",
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
-  config.systemInstruction += `\n\n[SISTEMA]: IMPORTANTE. Para referencias de tiempo y reagendación de llamadas, la fecha y hora exacta actual es: ${horaMexico} (Hora de la Ciudad de México). Si el cliente te pide llamar en X minutos, debes calcular el ISO 8601 a partir de esta hora estricta.`;
-
-  // Inject Global AMD (Answering Machine Detection) instructions
-  const amdInstruction = "\n\nCRITICAL RULE: Si escuchas palabras como 'buzón de voz', 'deja tu mensaje', o si escuchas el tono de un beep, no digas nada y ejecuta inmediatamente la herramienta para colgar la llamada con el parámetro action establecido en 'avr_hangup' para colgar la llamada.";
-  config.systemInstruction += amdInstruction;
-
-  // Inject Session/Phone number context
-  if (sessionContext && sessionContext.direction) {
-    const dir = sessionContext.direction;
-    const custNum = sessionContext.customerNumber || "desconocido";
-    const vonNum = sessionContext.vonageNumber || "desconocido";
-    let contextPrompt = "\n\n[CONTEXTO DE LA LLAMADA]";
-    if (dir === "outbound") {
-      contextPrompt += `\n- Dirección de la llamada: Saliente (Outbound)\n- Número del cliente marcado: ${custNum}\n- Número de la empresa/Vonage originador: ${vonNum}`;
+    // Per-agent prompt takes highest priority, then global env vars
+    if (sessionPrompt) {
+      config.systemInstruction = sessionPrompt.replace(/\\n/g, "\n");
+      console.log("Using per-agent PROMPT override");
+    } else if (process.env.GEMINI_INSTRUCTIONS) {
+      config.systemInstruction = process.env.GEMINI_INSTRUCTIONS;
+      console.log("Using GEMINI_INSTRUCTIONS from environment variable");
+    } else if (process.env.GEMINI_URL_INSTRUCTIONS) {
+      try {
+        const response = await axios.get(process.env.GEMINI_URL_INSTRUCTIONS, {
+          headers: {
+            "Content-Type": "application/json",
+            "X-AVR-UUID": sessionUuid,
+          },
+        });
+        console.log("Instructions loaded from GEMINI_URL_INSTRUCTIONS");
+        const data = await response.data;
+        console.log(data);
+        config.systemInstruction = data.system;
+      } catch (error) {
+        console.error(
+          `Error loading instructions from ${process.env.GEMINI_URL_INSTRUCTIONS}: ${error.message}`
+        );
+      }
+    } else if (process.env.GEMINI_FILE_INSTRUCTIONS) {
+      try {
+        const data = await fsp.readFile(
+          process.env.GEMINI_FILE_INSTRUCTIONS,
+          "utf8"
+        );
+        console.log("Using GEMINI_FILE_INSTRUCTIONS from environment variable");
+        console.log(data);
+        config.systemInstruction = data;
+      } catch (error) {
+        console.error(
+          `Error loading instructions from ${process.env.GEMINI_FILE_INSTRUCTIONS}: ${error.message}`
+        );
+      }
     } else {
-      contextPrompt += `\n- Dirección de la llamada: Entrante (Inbound)\n- Número del cliente que llama: ${custNum}\n- Número de la empresa/Vonage al que entró la llamada: ${vonNum}`;
+      console.log("Using default instructions");
+      config.systemInstruction = "You are a helpful assistant and answer in a friendly tone.";
     }
 
-    if (sessionContext.customerName) {
-      try {
-        contextPrompt += `\n- Nombre del cliente: ${decodeURIComponent(sessionContext.customerName)}`;
-      } catch (e) {
-        contextPrompt += `\n- Nombre del cliente: ${sessionContext.customerName}`;
+    // Inject Time Consciousness (America/Mexico_City timezone)
+    const horaMexico = new Date().toLocaleString("es-MX", { 
+      timeZone: "America/Mexico_City",
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    config.systemInstruction += `\n\n[SISTEMA]: IMPORTANTE. Para referencias de tiempo y reagendación de llamadas, la fecha y hora exacta actual es: ${horaMexico} (Hora de la Ciudad de México). Si el cliente te pide llamar en X minutos, debes calcular el ISO 8601 a partir de esta hora estricta.`;
+
+    // Inject Global AMD (Answering Machine Detection) instructions
+    const amdInstruction = "\n\nCRITICAL RULE: Si escuchas palabras como 'buzón de voz', 'deja tu mensaje', o si escuchas el tono de un beep, no digas nada y ejecuta inmediatamente la herramienta para colgar la llamada con el parámetro action establecido en 'avr_hangup' para colgar la llamada.";
+    config.systemInstruction += amdInstruction;
+
+    // Inject Session/Phone number context
+    if (sessionContext && sessionContext.direction) {
+      const dir = sessionContext.direction;
+      const custNum = sessionContext.customerNumber || "desconocido";
+      const vonNum = sessionContext.vonageNumber || "desconocido";
+      let contextPrompt = "\n\n[CONTEXTO DE LA LLAMADA]";
+      if (dir === "outbound") {
+        contextPrompt += `\n- Dirección de la llamada: Saliente (Outbound)\n- Número del cliente marcado: ${custNum}\n- Número de la empresa/Vonage originador: ${vonNum}`;
+      } else {
+        contextPrompt += `\n- Dirección de la llamada: Entrante (Inbound)\n- Número del cliente que llama: ${custNum}\n- Número de la empresa/Vonage al que entró la llamada: ${vonNum}`;
       }
-    }
-    if (sessionContext.followupAttempt) {
-      try {
-        contextPrompt += `\n- Intento de seguimiento número: ${decodeURIComponent(sessionContext.followupAttempt)}`;
-      } catch (e) {
-        contextPrompt += `\n- Intento de seguimiento número: ${sessionContext.followupAttempt}`;
+
+      if (sessionContext.customerName) {
+        try {
+          contextPrompt += `\n- Nombre del cliente: ${decodeURIComponent(sessionContext.customerName)}`;
+        } catch (e) {
+          contextPrompt += `\n- Nombre del cliente: ${sessionContext.customerName}`;
+        }
       }
-    }
-    if (sessionContext.contextHistory) {
-      try {
-        contextPrompt += `\n- Historial/Contexto previo de la llamada: ${decodeURIComponent(sessionContext.contextHistory)}`;
-      } catch (e) {
-        contextPrompt += `\n- Historial/Contexto previo de la llamada: ${sessionContext.contextHistory}`;
+      if (sessionContext.followupAttempt) {
+        try {
+          contextPrompt += `\n- Intento de seguimiento número: ${decodeURIComponent(sessionContext.followupAttempt)}`;
+        } catch (e) {
+          contextPrompt += `\n- Intento de seguimiento número: ${sessionContext.followupAttempt}`;
+        }
       }
+      if (sessionContext.contextHistory) {
+        try {
+          contextPrompt += `\n- Historial/Contexto previo de la llamada: ${decodeURIComponent(sessionContext.contextHistory)}`;
+        } catch (e) {
+          contextPrompt += `\n- Historial/Contexto previo de la llamada: ${sessionContext.contextHistory}`;
+        }
+      }
+
+      if (dir === "outbound" && (sessionContext.followupAttempt || sessionContext.contextHistory)) {
+        contextPrompt += `\n\n[INSTRUCCIÓN DE SEGUIMIENTO IMPORTANTE]: Estás realizando AHORA MISMO la llamada de seguimiento (Intento #${sessionContext.followupAttempt || 1}) basada en el historial previo. DEBES iniciar la conversación saludando al cliente por su nombre, mencionando brevemente que le estás regresando la llamada según lo acordado en la conversación anterior (usa el historial como contexto), y retomando el tema principal. ¡No repitas la acción pasada de "te llamo en X minutos", porque esta ES la llamada prometida!`;
+      }
+
+      config.systemInstruction += contextPrompt;
     }
 
-    if (dir === "outbound" && (sessionContext.followupAttempt || sessionContext.contextHistory)) {
-      contextPrompt += `\n\n[INSTRUCCIÓN DE SEGUIMIENTO IMPORTANTE]: Estás realizando AHORA MISMO la llamada de seguimiento (Intento #${sessionContext.followupAttempt || 1}) basada en el historial previo. DEBES iniciar la conversación saludando al cliente por su nombre, mencionando brevemente que le estás regresando la llamada según lo acordado en la conversación anterior (usa el historial como contexto), y retomando el tema principal. ¡No repitas la acción pasada de "te llamo en X minutos", porque esta ES la llamada prometida!`;
-    }
+    try {
+      const tools = await loadTools(agentOverrides.toolsIds || []);
+      if (tools.length > 0) {
+        config.tools = [{ functionDeclarations: tools }];
+        config.toolConfig = {
+          functionCallingConfig: { mode: "AUTO" }
+        };
 
-    config.systemInstruction += contextPrompt;
+        // If avr_search_knowledge_base is available, force its use via a critical system instruction
+        const hasKnowledgeBase = tools.some(t => t.name === "avr_search_knowledge_base");
+        if (hasKnowledgeBase) {
+          const kbInstruction = `\n\n[REGLA CRÍTICA - BASE DE CONOCIMIENTOS]:\nTIENES PROHIBIDO responder por tu cuenta cualquier pregunta sobre políticas, procedimientos, horarios, precios, garantías, excepciones o cuando el cliente presente una objeción o duda específica sobre el servicio.\nEN ESTOS CASOS DEBES OBLIGATORIAMENTE llamar a la herramienta "avr_search_knowledge_base" ANTES de responder.\nNUNCA improvises ni uses tu conocimiento general para responder este tipo de preguntas. Llama a la herramienta primero, luego responde con la información que te devuelve.`;
+          config.systemInstruction += kbInstruction;
+          console.log("[avr_search_knowledge_base] Critical KB instruction appended to system prompt.");
+        }
+
+        console.log(`Loaded ${tools.length} tools for Gemini:`, JSON.stringify(tools, null, 2));
+      } else {
+        console.warn("No tools loaded for Gemini session.");
+      }
+    } catch (error) {
+      console.error(`Error loading tools for Gemini: ${error.message}`);
+    }
   }
-
-  try {
-    const tools = await loadTools(agentOverrides.toolsIds || []);
-    if (tools.length > 0) {
-      config.tools = [{ functionDeclarations: tools }];
-      // AUTO mode: Gemini decides when to call tools but respects the system prompt.
-      // Do NOT use ANY here — it causes empty-output crashes in Gemini Live.
-      config.toolConfig = {
-        functionCallingConfig: { mode: "AUTO" }
-      };
-
-      // If avr_search_knowledge_base is available, force its use via a critical system instruction
-      const hasKnowledgeBase = tools.some(t => t.name === "avr_search_knowledge_base");
-      if (hasKnowledgeBase) {
-        const kbInstruction = `\n\n[REGLA CRÍTICA - BASE DE CONOCIMIENTOS]:\nTIENES PROHIBIDO responder por tu cuenta cualquier pregunta sobre políticas, procedimientos, horarios, precios, garantías, excepciones o cuando el cliente presente una objeción o duda específica sobre el servicio.\nEN ESTOS CASOS DEBES OBLIGATORIAMENTE llamar a la herramienta "avr_search_knowledge_base" ANTES de responder.\nNUNCA improvises ni uses tu conocimiento general para responder este tipo de preguntas. Llama a la herramienta primero, luego responde con la información que te devuelve.`;
-        config.systemInstruction += kbInstruction;
-        console.log("[avr_search_knowledge_base] Critical KB instruction appended to system prompt.");
-      }
-
-      console.log(`Loaded ${tools.length} tools for Gemini:`, JSON.stringify(tools, null, 2));
-    } else {
-      console.warn("No tools loaded for Gemini session.");
-    }
-  } catch (error) {
-    console.error(`Error loading tools for Gemini: ${error.message}`);
-  }
-
 
   console.log("Gemini Session Config:", config);
   console.log("Gemini Session Model:", model);
@@ -372,6 +376,8 @@ const handleClientConnection = (clientWs, reqUrl) => {
                   structuredDataPlan: agent.structuredDataPlan || null,
                   toolsIds:      agent.tools_ids              || [],
                   fileSearchStoreNames: agent.file_search_store_names || null,
+                  geminiCacheId:        agent.gemini_cache_id        || null,
+                  geminiCacheExpiresAt: agent.gemini_cache_expires_at || null,
                 };
                 console.log("Agent overrides loaded from Supabase:", agentOverrides);
               }
@@ -447,6 +453,148 @@ const handleClientConnection = (clientWs, reqUrl) => {
     let lastTranscriptionText = "";
     let lastTranscriptionTime = 0;
     try {
+      let activeCacheId = null;
+
+      const now = new Date();
+      if (agentOverrides.geminiCacheId && agentOverrides.geminiCacheExpiresAt && new Date(agentOverrides.geminiCacheExpiresAt) > now) {
+        activeCacheId = agentOverrides.geminiCacheId;
+        console.log(`[${sessionUuid}] Usando Context Cache existente y válido: ${activeCacheId}`);
+      } else {
+        // Cargar herramientas e instrucciones
+        const tools = await loadTools(agentOverrides.toolsIds || []);
+        
+        let systemInstruction = "You are a helpful assistant and answer in a friendly tone.";
+        if (agentOverrides.prompt) {
+          systemInstruction = agentOverrides.prompt.replace(/\\n/g, "\n");
+        } else if (process.env.GEMINI_INSTRUCTIONS) {
+          systemInstruction = process.env.GEMINI_INSTRUCTIONS;
+        } else if (process.env.GEMINI_FILE_INSTRUCTIONS) {
+          try {
+            systemInstruction = await fsp.readFile(process.env.GEMINI_FILE_INSTRUCTIONS, "utf8");
+          } catch (e) {
+            console.error(`Error loading file instructions for cache: ${e.message}`);
+          }
+        }
+        
+        // Inject Time Consciousness
+        const horaMexico = new Date().toLocaleString("es-MX", { 
+          timeZone: "America/Mexico_City",
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        systemInstruction += `\n\n[SISTEMA]: IMPORTANTE. Para referencias de tiempo y reagendación de llamadas, la fecha y hora exacta actual es: ${horaMexico} (Hora de la Ciudad de México). Si el cliente te pide llamar en X minutos, debes calcular el ISO 8601 a partir de esta hora estricta.`;
+
+        // Inject Global AMD
+        const amdInstruction = "\n\nCRITICAL RULE: Si escuchas palabras como 'buzón de voz', 'deja tu mensaje', o si escuchas el tono de un beep, no digas nada y ejecuta inmediatamente la herramienta para colgar la llamada con el parámetro action establecido en 'avr_hangup' para colgar la llamada.";
+        systemInstruction += amdInstruction;
+
+        // Inject Session/Phone number context
+        const direction = callDirection;
+        const custNum = customerNumber || "desconocido";
+        const vonNum = vonageNumber || "desconocido";
+        let contextPrompt = "\n\n[CONTEXTO DE LA LLAMADA]";
+        if (direction === "outbound") {
+          contextPrompt += `\n- Dirección de la llamada: Saliente (Outbound)\n- Número del cliente marcado: ${custNum}\n- Número de la empresa/Vonage originador: ${vonNum}`;
+        } else {
+          contextPrompt += `\n- Dirección de la llamada: Entrante (Inbound)\n- Número del cliente que llama: ${custNum}\n- Número de la empresa/Vonage al que entró la llamada: ${vonNum}`;
+        }
+
+        if (customerName) {
+          try {
+            contextPrompt += `\n- Nombre del cliente: ${decodeURIComponent(customerName)}`;
+          } catch (e) {
+            contextPrompt += `\n- Nombre del cliente: ${customerName}`;
+          }
+        }
+        if (followupAttempt) {
+          try {
+            contextPrompt += `\n- Intento de seguimiento número: ${decodeURIComponent(followupAttempt)}`;
+          } catch (e) {
+            contextPrompt += `\n- Intento de seguimiento número: ${followupAttempt}`;
+          }
+        }
+        if (contextHistory) {
+          try {
+            contextPrompt += `\n- Historial/Contexto previo de la llamada: ${decodeURIComponent(contextHistory)}`;
+          } catch (e) {
+            contextPrompt += `\n- Historial/Contexto previo de la llamada: ${contextHistory}`;
+          }
+        }
+
+        if (direction === "outbound" && (followupAttempt || contextHistory)) {
+          contextPrompt += `\n\n[INSTRUCCIÓN DE SEGUIMIENTO IMPORTANTE]: Estás realizando AHORA MISMO la llamada de seguimiento (Intento #${followupAttempt || 1}) basada en el historial previo. DEBES iniciar la conversación saludando al cliente por su nombre, mencionando brevemente que le estás regresando la llamada según lo acordado en la conversación anterior (usa el historial como contexto), y retomando el tema principal. ¡No repitas la acción pasada de "te llamo en X minutos", porque esta ES la llamada prometida!`;
+        }
+
+        systemInstruction += contextPrompt;
+
+        // If avr_search_knowledge_base is available, force its use via a critical system instruction
+        const hasKnowledgeBase = tools.some(t => t.name === "avr_search_knowledge_base");
+        if (hasKnowledgeBase) {
+          const kbInstruction = `\n\n[REGLA CRÍTICA - BASE DE CONOCIMIENTOS]:\nTIENES PROHIBIDO responder por tu cuenta cualquier pregunta sobre políticas, procedimientos, horarios, precios, garantías, excepciones o cuando el cliente presente una objeción o duda específica sobre el servicio.\nEN ESTOS CASOS DEBES OBLIGATORIAMENTE llamar a la herramienta "avr_search_knowledge_base" ANTES de responder.\nNUNCA improvises ni uses tu conocimiento general para responder este tipo de preguntas. Llama a la herramienta primero, luego responde con la información que te devuelve.`;
+          systemInstruction += kbInstruction;
+        }
+
+        // Estimar tokens
+        const aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+        const modelName = process.env.GEMINI_MODEL || "gemini-3.1-flash-live-preview";
+        
+        let totalTokens = 0;
+        try {
+          const countRes = await aiClient.models.countTokens({
+            model: modelName,
+            contents: systemInstruction + JSON.stringify(tools)
+          });
+          totalTokens = countRes.totalTokens || 0;
+        } catch (err) {
+          console.warn("Error contando tokens, asumiendo conteo por caracteres:", err.message);
+          totalTokens = Math.round((systemInstruction.length + JSON.stringify(tools).length) / 4);
+        }
+
+        if (totalTokens >= 1024) {
+          try {
+            console.log(`[${sessionUuid}] Creando nuevo Context Cache (Tokens: ${totalTokens})...`);
+            const expirationTtlSeconds = 3600; // 1 hora
+            const cache = await aiClient.caches.create({
+              model: modelName,
+              config: {
+                displayName: `cache-agente-${agentId}`,
+                ttl: `${expirationTtlSeconds}s`,
+                systemInstruction: systemInstruction,
+                tools: tools.length > 0 ? [{ functionDeclarations: tools }] : undefined
+              }
+            });
+
+            activeCacheId = cache.name;
+            const expiresAt = new Date(Date.now() + expirationTtlSeconds * 1000).toISOString();
+
+            // Actualizar en Supabase
+            if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+              await axios.patch(`${process.env.SUPABASE_URL}/rest/v1/agentesID_Roda_IA?id=eq.${agentId}`, {
+                gemini_cache_id: activeCacheId,
+                gemini_cache_expires_at: expiresAt
+              }, {
+                headers: {
+                  apikey: process.env.SUPABASE_KEY,
+                  Authorization: `Bearer ${process.env.SUPABASE_KEY}`,
+                  "Content-Type": "application/json"
+                }
+              });
+              console.log(`[${sessionUuid}] Nuevo Context Cache guardado en Supabase: ${activeCacheId}`);
+            }
+          } catch (cacheErr) {
+            console.error("Error al crear el caché en Google o actualizar base de datos:", cacheErr.message);
+            // Fallback silencioso
+            activeCacheId = null;
+          }
+        } else {
+          console.log(`[${sessionUuid}] El prompt y herramientas no alcanzan el límite de 1024 tokens (${totalTokens} tokens). Iniciando llamada convencional.`);
+        }
+      }
+
       session = await connectToGeminiSdk(sessionUuid, {
         onopen: function () {
           console.debug("Gemini Session Opened");
@@ -570,7 +718,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
         customerName: customerName,
         followupAttempt: followupAttempt,
         contextHistory: contextHistory
-      });
+      }, activeCacheId);
       // begin gemini conversation
       session.sendRealtimeInput({
         text: "Please start the conversation."
