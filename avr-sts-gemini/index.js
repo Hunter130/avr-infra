@@ -243,6 +243,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
 
   let audioBuffer8k = [];
   let session = null;
+  let lastUsageMetadata = null;
   let audioFrames = [];
   let callStartTime = null;
   let conversationLog = [];
@@ -451,6 +452,10 @@ const handleClientConnection = (clientWs, reqUrl) => {
           console.debug("Gemini Session Opened");
         },
         onmessage: async function (message) {
+          if (message.usageMetadata) {
+            lastUsageMetadata = message.usageMetadata;
+            console.log(`[${sessionUuid}] usageMetadata recibido: TotalTokens=${message.usageMetadata.totalTokenCount}`);
+          }
           if (message.serverContent?.outputTranscription) {
             const text = message.serverContent.outputTranscription.text;
             // Deduplicate fast consecutive identical chunks
@@ -620,7 +625,71 @@ const handleClientConnection = (clientWs, reqUrl) => {
       const baseCostDeepgram = parseFloat(agentOverrides.costDeepgram || process.env.COST_DEEPGRAM_PER_SEC) || 0;
       const baseCostVonage = parseFloat(process.env.COST_VONAGE_PER_SEC || 0.001);
       
-      const costGemini = baseCostGemini * durationSeconds;
+      const billingMode = process.env.GEMINI_BILLING_MODE || 'token';
+      const growthCoeff = parseFloat(process.env.GEMINI_BILLING_GROWTH_COEFF) || 0.005;
+
+      let costGemini = 0;
+      let tokenBreakdown = null;
+
+      if (billingMode === 'token' && lastUsageMetadata) {
+        const rateInputText = parseFloat(process.env.GEMINI_INPUT_TEXT_RATE) || 0.75;
+        const rateInputAudio = parseFloat(process.env.GEMINI_INPUT_AUDIO_RATE) || 3.00;
+        const rateOutputText = parseFloat(process.env.GEMINI_OUTPUT_TEXT_RATE) || 4.50;
+        const rateOutputAudio = parseFloat(process.env.GEMINI_OUTPUT_AUDIO_RATE) || 12.00;
+
+        let costInput = 0;
+        let costOutput = 0;
+
+        // Desglosar tokens de entrada por modalidad
+        if (lastUsageMetadata.promptTokensDetails && Array.isArray(lastUsageMetadata.promptTokensDetails)) {
+          for (const detail of lastUsageMetadata.promptTokensDetails) {
+            const mod = (detail.modality || '').toUpperCase();
+            const count = detail.tokenCount || 0;
+            if (mod === 'AUDIO') {
+              costInput += (count / 1000000) * rateInputAudio;
+            } else { // TEXT u otras modalidades
+              costInput += (count / 1000000) * rateInputText;
+            }
+          }
+        } else {
+          // Fallback si viene el total de entrada pero no el arreglo detallado: assumimos que es predominantemente audio
+          const promptCount = lastUsageMetadata.promptTokenCount || 0;
+          costInput = (promptCount / 1000000) * rateInputAudio;
+        }
+
+        // Desglosar tokens de salida por modalidad
+        if (lastUsageMetadata.candidatesTokensDetails && Array.isArray(lastUsageMetadata.candidatesTokensDetails)) {
+          for (const detail of lastUsageMetadata.candidatesTokensDetails) {
+            const mod = (detail.modality || '').toUpperCase();
+            const count = detail.tokenCount || 0;
+            if (mod === 'AUDIO') {
+              costOutput += (count / 1000000) * rateOutputAudio;
+            } else { // TEXT u otras modalidades
+              costOutput += (count / 1000000) * rateOutputText;
+            }
+          }
+        } else {
+          // Fallback si viene el total de salida pero no el desglose: assumimos audio
+          const candidatesCount = lastUsageMetadata.candidatesTokenCount || 0;
+          costOutput = (candidatesCount / 1000000) * rateOutputAudio;
+        }
+
+        costGemini = costInput + costOutput;
+        tokenBreakdown = {
+          promptTokenCount: lastUsageMetadata.promptTokenCount,
+          candidatesTokenCount: lastUsageMetadata.candidatesTokenCount,
+          totalTokenCount: lastUsageMetadata.totalTokenCount,
+          promptTokensDetails: lastUsageMetadata.promptTokensDetails,
+          candidatesTokensDetails: lastUsageMetadata.candidatesTokensDetails
+        };
+        
+        console.log(`[${sessionUuid}] Cobro por tokens: $${costGemini.toFixed(6)} (Entrada: ${lastUsageMetadata.promptTokenCount}, Salida: ${lastUsageMetadata.candidatesTokenCount})`);
+      } else {
+        // Fórmula progresiva en base al tiempo transcurrido
+        costGemini = baseCostGemini * durationSeconds * (1 + growthCoeff * durationSeconds);
+        console.log(`[${sessionUuid}] Cobro basado en tiempo progresivo: $${costGemini.toFixed(6)} (Duración: ${durationSeconds}s, Coef: ${growthCoeff})`);
+      }
+
       const costDeepgram = baseCostDeepgram * durationSeconds;
       
       // Calculate Vonage cost if the call involves an external number (length > 4)
@@ -693,7 +762,8 @@ La transcripción puede estar incompleta. Genera solo un JSON válido como respu
                     transcription: parseFloat(costDeepgram.toFixed(6)),
                     post_call_analysis: parseFloat(costDeepseek.toFixed(6)),
                     telephony_vonage: parseFloat(costVonage.toFixed(6))
-                }
+                },
+                gemini_tokens: tokenBreakdown
             }
         });
         console.log("Webhook sent successfully with total cost: $" + totalCost.toFixed(6));
