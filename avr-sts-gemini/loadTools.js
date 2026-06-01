@@ -9,7 +9,7 @@ let supabaseToolsCache = new Map();
  * @param {Array<string>} allowedToolsIds - Array of allowed tool UUIDs for the agent
  * @returns {Array} List of all available tools
  */
-async function loadTools(allowedToolsIds = []) {
+async function loadTools(allowedToolsIds = [], fileSearchStoreNames = null) {
   // Define tool directory paths
   const avrToolsDir = path.join(__dirname, 'avr_tools');  // Project-provided tools
   const toolsDir = path.join(__dirname, 'tools');         // User custom tools
@@ -51,10 +51,24 @@ async function loadTools(allowedToolsIds = []) {
   };
 
   // Load tools from both directories
-  allTools = [
+  let localTools = [
     ...loadToolsFromDir(avrToolsDir),  // Project tools
     ...loadToolsFromDir(toolsDir)      // Custom tools
   ];
+
+  // Filter out avr_search_knowledge_base if fileSearchStoreNames is empty/null
+  const hasStoreNames = Array.isArray(fileSearchStoreNames)
+    ? fileSearchStoreNames.length > 0
+    : (typeof fileSearchStoreNames === 'string' && fileSearchStoreNames.trim().length > 0);
+
+  if (!hasStoreNames) {
+    localTools = localTools.filter(t => t.name !== 'avr_search_knowledge_base');
+    console.log("[loadTools] avr_search_knowledge_base excluded because fileSearchStoreNames is empty.");
+  } else {
+    console.log("[loadTools] avr_search_knowledge_base included. fileSearchStoreNames:", fileSearchStoreNames);
+  }
+
+  allTools = localTools;
 
   // Fetch tools from Supabase
   if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {

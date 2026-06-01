@@ -196,7 +196,7 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
     }
 
     try {
-      const tools = await loadTools(agentOverrides.toolsIds || []);
+      const tools = await loadTools(agentOverrides.toolsIds || [], agentOverrides.fileSearchStoreNames);
       if (tools.length > 0) {
         config.tools = [{ functionDeclarations: tools }];
         config.toolConfig = {
@@ -461,7 +461,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
         console.log(`[${sessionUuid}] Usando Context Cache existente y válido: ${activeCacheId}`);
       } else {
         // Cargar herramientas e instrucciones
-        const tools = await loadTools(agentOverrides.toolsIds || []);
+        const tools = await loadTools(agentOverrides.toolsIds || [], agentOverrides.fileSearchStoreNames);
         
         let systemInstruction = "You are a helpful assistant and answer in a friendly tone.";
         if (agentOverrides.prompt) {
