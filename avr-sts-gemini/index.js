@@ -42,6 +42,11 @@ console.log("Loaded VAD Config from process.env:", {
 // Audio resamplers are created per-connection to avoid state contamination in concurrent calls
 
 const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, sessionContext = {}, activeCacheId = null) => {
+  const pfx = `[${sessionUuid ? sessionUuid.substring(0, 8) : 'unknown'}]`;
+  const log = (...args) => console.log(pfx, ...args);
+  const logWarn = (...args) => console.warn(pfx, ...args);
+  const logError = (...args) => console.error(pfx, ...args);
+
   const model =
     process.env.GEMINI_MODEL || "gemini-3.1-flash-live-preview";
 
@@ -93,15 +98,15 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
     config.cachedContent = activeCacheId;
     // Omit systemInstruction and tools from config when cachedContent is active
     delete config.systemInstruction;
-    console.log("Configurando sesión Gemini Live con cachedContent (se omiten systemInstruction y tools)");
+    log("Configurando sesión Gemini Live con cachedContent (se omiten systemInstruction y tools)");
   } else {
     // Per-agent prompt takes highest priority, then global env vars
     if (sessionPrompt) {
       config.systemInstruction = sessionPrompt.replace(/\\n/g, "\n");
-      console.log("Using per-agent PROMPT override");
+      log("Using per-agent PROMPT override");
     } else if (process.env.GEMINI_INSTRUCTIONS) {
       config.systemInstruction = process.env.GEMINI_INSTRUCTIONS;
-      console.log("Using GEMINI_INSTRUCTIONS from environment variable");
+      log("Using GEMINI_INSTRUCTIONS from environment variable");
     } else if (process.env.GEMINI_URL_INSTRUCTIONS) {
       try {
         const response = await axios.get(process.env.GEMINI_URL_INSTRUCTIONS, {
@@ -110,12 +115,12 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
             "X-AVR-UUID": sessionUuid,
           },
         });
-        console.log("Instructions loaded from GEMINI_URL_INSTRUCTIONS");
+        log("Instructions loaded from GEMINI_URL_INSTRUCTIONS");
         const data = await response.data;
-        console.log(data);
+        log(data);
         config.systemInstruction = data.system;
       } catch (error) {
-        console.error(
+        logError(
           `Error loading instructions from ${process.env.GEMINI_URL_INSTRUCTIONS}: ${error.message}`
         );
       }
@@ -125,16 +130,16 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
           process.env.GEMINI_FILE_INSTRUCTIONS,
           "utf8"
         );
-        console.log("Using GEMINI_FILE_INSTRUCTIONS from environment variable");
-        console.log(data);
+        log("Using GEMINI_FILE_INSTRUCTIONS from environment variable");
+        log(data);
         config.systemInstruction = data;
       } catch (error) {
-        console.error(
+        logError(
           `Error loading instructions from ${process.env.GEMINI_FILE_INSTRUCTIONS}: ${error.message}`
         );
       }
     } else {
-      console.log("Using default instructions");
+      log("Using default instructions");
       config.systemInstruction = "You are a helpful assistant and answer in a friendly tone.";
     }
 
@@ -208,20 +213,20 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
         if (hasKnowledgeBase) {
           const kbInstruction = `\n\n[REGLA CRÍTICA - BASE DE CONOCIMIENTOS]:\nTIENES PROHIBIDO responder por tu cuenta cualquier pregunta sobre políticas, procedimientos, horarios, precios, garantías, excepciones o cuando el cliente presente una objeción o duda específica sobre el servicio.\nEN ESTOS CASOS DEBES OBLIGATORIAMENTE llamar a la herramienta "avr_search_knowledge_base" ANTES de responder.\nNUNCA improvises ni uses tu conocimiento general para responder este tipo de preguntas. Llama a la herramienta primero, luego responde con la información que te devuelve.`;
           config.systemInstruction += kbInstruction;
-          console.log("[avr_search_knowledge_base] Critical KB instruction appended to system prompt.");
+          log("[avr_search_knowledge_base] Critical KB instruction appended to system prompt.");
         }
 
-        console.log(`Loaded ${tools.length} tools for Gemini:`, JSON.stringify(tools, null, 2));
+        log(`Loaded ${tools.length} tools for Gemini:`, JSON.stringify(tools, null, 2));
       } else {
-        console.warn("No tools loaded for Gemini session.");
+        logWarn("No tools loaded for Gemini session.");
       }
     } catch (error) {
-      console.error(`Error loading tools for Gemini: ${error.message}`);
+      logError(`Error loading tools for Gemini: ${error.message}`);
     }
   }
 
-  console.log("Gemini Session Config:", config);
-  console.log("Gemini Session Model:", model);
+  log("Gemini Session Config:", config);
+  log("Gemini Session Model:", model);
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
@@ -242,8 +247,19 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
  * @param {string} reqUrl - WebSocket request URL
  */
 const handleClientConnection = (clientWs, reqUrl) => {
-  console.log("New client WebSocket connection received, URL:", reqUrl);
   let sessionUuid = null;
+
+  const logPrefix = () => {
+    return sessionUuid ? `[${sessionUuid.substring(0, 8)}]` : `[new-conn]`;
+  };
+
+  const log = (...args) => console.log(logPrefix(), ...args);
+  const logWarn = (...args) => console.warn(logPrefix(), ...args);
+  const logError = (...args) => console.error(logPrefix(), ...args);
+  const logInfo = (...args) => console.info(logPrefix(), ...args);
+  const logDebug = (...args) => console.debug(logPrefix(), ...args);
+
+  log("New client WebSocket connection received, URL:", reqUrl);
 
   let audioBuffer8k = [];
   let session = null;
@@ -354,7 +370,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
           callMap.delete(sessionUuid); // Cleanup
           
           callStartTime = Date.now();
-          console.log("Session UUID:", sessionUuid, "| Agent ID:", agentId);
+          log("Session UUID:", sessionUuid, "| Agent ID:", agentId);
 
           // Fetch per-agent config from Supabase directly
           if (agentId && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
@@ -379,10 +395,10 @@ const handleClientConnection = (clientWs, reqUrl) => {
                   geminiCacheId:        agent.gemini_cache_id        || null,
                   geminiCacheExpiresAt: agent.gemini_cache_expires_at || null,
                 };
-                console.log("Agent overrides loaded from Supabase:", agentOverrides);
+                log("Agent overrides loaded from Supabase:", agentOverrides);
               }
             } catch (err) {
-              console.error("Failed to fetch agent from Supabase:", err.message);
+              logError("Failed to fetch agent from Supabase:", err.message);
             }
           }
 
@@ -390,9 +406,9 @@ const handleClientConnection = (clientWs, reqUrl) => {
           try {
             downsampler = await create(1, 24000, 8000); // 1 channel, 24kHz to 8kHz
             upsampler = await create(1, 8000, 16000); // 1 channel, 8kHz to 16kHz
-            console.log(`[${sessionUuid}] Per-connection audio resamplers initialized`);
+            log(`[${sessionUuid}] Per-connection audio resamplers initialized`);
           } catch (err) {
-            console.error(`[${sessionUuid}] Error initializing audio resamplers:`, err);
+            logError(`[${sessionUuid}] Error initializing audio resamplers:`, err);
             clientWs.send(JSON.stringify({ type: "error", message: "Failed to initialize audio resamplers" }));
             clientWs.close();
             return;
@@ -405,17 +421,17 @@ const handleClientConnection = (clientWs, reqUrl) => {
             deepgramWs = new WebSocket("wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&language=es", {
               headers: { Authorization: `Token ${process.env.DEEPGRAM_API_KEY}` }
             });
-            deepgramWs.on("open", () => console.log("Deepgram connection opened"));
+            deepgramWs.on("open", () => log("Deepgram connection opened"));
             deepgramWs.on("message", (data) => {
               try {
                 const dgMsg = JSON.parse(data);
                 if (dgMsg.is_final && dgMsg.channel?.alternatives?.[0]?.transcript) {
                   conversationLog.push(`Usuario: ${dgMsg.channel.alternatives[0].transcript}`);
-                  console.log("Deepgram STT:", dgMsg.channel.alternatives[0].transcript);
+                  log("Deepgram STT:", dgMsg.channel.alternatives[0].transcript);
                 }
               } catch (e) {}
             });
-            deepgramWs.on("error", (e) => console.error("Deepgram Error:", e.message));
+            deepgramWs.on("error", (e) => logError("Deepgram Error:", e.message));
           }
           break;
 
@@ -440,11 +456,11 @@ const handleClientConnection = (clientWs, reqUrl) => {
           break;
 
         default:
-          console.log("Unknown message type from client:", message.type);
+          log("Unknown message type from client:", message.type);
           break;
       }
     } catch (error) {
-      console.error("Error processing client message:", error);
+      logError("Error processing client message:", error);
     }
   });
 
@@ -458,7 +474,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
       const now = new Date();
       if (agentOverrides.geminiCacheId && agentOverrides.geminiCacheExpiresAt && new Date(agentOverrides.geminiCacheExpiresAt) > now) {
         activeCacheId = agentOverrides.geminiCacheId;
-        console.log(`[${sessionUuid}] Usando Context Cache existente y válido: ${activeCacheId}`);
+        log(`[${sessionUuid}] Usando Context Cache existente y válido: ${activeCacheId}`);
       } else {
         // Cargar herramientas e instrucciones
         const tools = await loadTools(agentOverrides.toolsIds || [], agentOverrides.fileSearchStoreNames);
@@ -472,7 +488,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
           try {
             systemInstruction = await fsp.readFile(process.env.GEMINI_FILE_INSTRUCTIONS, "utf8");
           } catch (e) {
-            console.error(`Error loading file instructions for cache: ${e.message}`);
+            logError(`Error loading file instructions for cache: ${e.message}`);
           }
         }
         
@@ -550,13 +566,13 @@ const handleClientConnection = (clientWs, reqUrl) => {
           });
           totalTokens = countRes.totalTokens || 0;
         } catch (err) {
-          console.warn("Error contando tokens, asumiendo conteo por caracteres:", err.message);
+          logWarn("Error contando tokens, asumiendo conteo por caracteres:", err.message);
           totalTokens = Math.round((systemInstruction.length + JSON.stringify(tools).length) / 4);
         }
 
         if (totalTokens >= 1024) {
           try {
-            console.log(`[${sessionUuid}] Creando nuevo Context Cache (Tokens: ${totalTokens})...`);
+            log(`[${sessionUuid}] Creando nuevo Context Cache (Tokens: ${totalTokens})...`);
             const expirationTtlSeconds = 3600; // 1 hora
             const cache = await aiClient.caches.create({
               model: modelName,
@@ -583,26 +599,26 @@ const handleClientConnection = (clientWs, reqUrl) => {
                   "Content-Type": "application/json"
                 }
               });
-              console.log(`[${sessionUuid}] Nuevo Context Cache guardado en Supabase: ${activeCacheId}`);
+              log(`[${sessionUuid}] Nuevo Context Cache guardado en Supabase: ${activeCacheId}`);
             }
           } catch (cacheErr) {
-            console.error("Error al crear el caché en Google o actualizar base de datos:", cacheErr.message);
+            logError("Error al crear el caché en Google o actualizar base de datos:", cacheErr.message);
             // Fallback silencioso
             activeCacheId = null;
           }
         } else {
-          console.log(`[${sessionUuid}] El prompt y herramientas no alcanzan el límite de 1024 tokens (${totalTokens} tokens). Iniciando llamada convencional.`);
+          log(`[${sessionUuid}] El prompt y herramientas no alcanzan el límite de 1024 tokens (${totalTokens} tokens). Iniciando llamada convencional.`);
         }
       }
 
       session = await connectToGeminiSdk(sessionUuid, {
         onopen: function () {
-          console.debug("Gemini Session Opened");
+          logDebug("Gemini Session Opened");
         },
         onmessage: async function (message) {
           if (message.usageMetadata) {
             lastUsageMetadata = message.usageMetadata;
-            console.log(`[${sessionUuid}] usageMetadata recibido: TotalTokens=${message.usageMetadata.totalTokenCount}`);
+            log(`[${sessionUuid}] usageMetadata recibido: TotalTokens=${message.usageMetadata.totalTokenCount}`);
           }
           if (message.serverContent?.outputTranscription) {
             const text = message.serverContent.outputTranscription.text;
@@ -614,15 +630,15 @@ const handleClientConnection = (clientWs, reqUrl) => {
             lastTranscriptionTime = Date.now();
 
             conversationLog.push(`Gemini: ${text}`);
-            console.log("Gemini Output Transcription:", text);
+            log("Gemini Output Transcription:", text);
           }
           if (message.serverContent?.groundingMetadata) {
             const metadata = message.serverContent.groundingMetadata;
-            console.log("\n[GEMINI RAG GROUNDING] Metadata received:");
-            console.log(JSON.stringify(metadata, null, 2));
+            log("\n[GEMINI RAG GROUNDING] Metadata received:");
+            log(JSON.stringify(metadata, null, 2));
             if (metadata.groundingChunks) {
               metadata.groundingChunks.forEach((chunk, idx) => {
-                console.log(`- Source #${idx + 1}: ${chunk.web?.title || chunk.title || 'Document'} - ${chunk.web?.uri || chunk.uri || 'no-link'}`);
+                log(`- Source #${idx + 1}: ${chunk.web?.title || chunk.title || 'Document'} - ${chunk.web?.uri || chunk.uri || 'no-link'}`);
               });
             }
           }
@@ -646,7 +662,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
               });
             }
           } else if (message.toolCall?.functionCalls) {
-            console.log(
+            log(
               "Gemini Session Tool Calls:",
               message.toolCall.functionCalls
             );
@@ -686,20 +702,20 @@ const handleClientConnection = (clientWs, reqUrl) => {
                 });
                 functionResponses.push(obj);
               }
-              console.log("Gemini Session Tool Response:", obj.response.result);
+              log("Gemini Session Tool Response:", obj.response.result);
             }
 
             session.sendToolResponse({ functionResponses });
           } else if (message.serverContent?.interrupted) {
-            console.log("Gemini Session Interruption");
+            log("Gemini Session Interruption");
             audioFrames = [];
             clientWs.send(JSON.stringify({ type: "interruption" }));
           } else {
-            // console.log("Gemini Session Message:", message);
+            // log("Gemini Session Message:", message);
           }
         },
         onerror: function (e) {
-          console.error("Gemini Session Error:", e.message);
+          logError("Gemini Session Error:", e.message);
           clientWs.send(
             JSON.stringify({
               type: "error",
@@ -708,7 +724,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
           );
         },
         onclose: function (e) {
-          console.info("Gemini Session Closed", e.reason);
+          logInfo("Gemini Session Closed", e.reason);
           clientWs.close();
         },
       }, agentOverrides, {
@@ -724,7 +740,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
         text: "Please start the conversation."
       });
     } catch (error) {
-      console.error("Error initializing Gemini connection:", error);
+      logError("Error initializing Gemini connection:", error);
       clientWs.send(
         JSON.stringify({
           type: "error",
@@ -736,12 +752,12 @@ const handleClientConnection = (clientWs, reqUrl) => {
 
   // Handle client WebSocket close
   clientWs.on("close", () => {
-    console.log("Client WebSocket connection closed");
+    log("Client WebSocket connection closed");
     cleanup();
   });
 
   clientWs.on("error", (err) => {
-    console.error("Client WebSocket error:", err);
+    logError("Client WebSocket error:", err);
     endedReason = "connection-dropped";
     cleanup();
   });
@@ -831,11 +847,11 @@ const handleClientConnection = (clientWs, reqUrl) => {
           candidatesTokensDetails: lastUsageMetadata.candidatesTokensDetails
         };
         
-        console.log(`[${sessionUuid}] Cobro por tokens: $${costGemini.toFixed(6)} (Entrada: ${lastUsageMetadata.promptTokenCount}, Salida: ${lastUsageMetadata.candidatesTokenCount})`);
+        log(`[${sessionUuid}] Cobro por tokens: $${costGemini.toFixed(6)} (Entrada: ${lastUsageMetadata.promptTokenCount}, Salida: ${lastUsageMetadata.candidatesTokenCount})`);
       } else {
         // Fórmula progresiva en base al tiempo transcurrido
         costGemini = baseCostGemini * durationSeconds * (1 + growthCoeff * durationSeconds);
-        console.log(`[${sessionUuid}] Cobro basado en tiempo progresivo: $${costGemini.toFixed(6)} (Duración: ${durationSeconds}s, Coef: ${growthCoeff})`);
+        log(`[${sessionUuid}] Cobro basado en tiempo progresivo: $${costGemini.toFixed(6)} (Duración: ${durationSeconds}s, Coef: ${growthCoeff})`);
       }
 
       const costDeepgram = baseCostDeepgram * durationSeconds;
@@ -849,7 +865,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
       // Asterisk MixMonitor saves the file as .wav
       const recordingUrl = process.env.RECORDING_BASE_URL ? `${process.env.RECORDING_BASE_URL}/${sessionUuid}.wav` : null;
       try {
-        console.log("Sending post-call webhook to N8N...");
+        log("Sending post-call webhook to N8N...");
         let analysis = "No analysis configured.";
         const logText = conversationLog.join("\n");
         let costDeepseek = 0;
@@ -914,9 +930,9 @@ La transcripción puede estar incompleta. Genera solo un JSON válido como respu
                 gemini_tokens: tokenBreakdown
             }
         });
-        console.log("Webhook sent successfully with total cost: $" + totalCost.toFixed(6));
+        log("Webhook sent successfully with total cost: $" + totalCost.toFixed(6));
       } catch (e) {
-         console.error("Webhook error:", e.message);
+         logError("Webhook error:", e.message);
       }
     }
   }
