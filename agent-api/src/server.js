@@ -50,9 +50,9 @@ function upsertBlock(filePath, tag, newBlock) {
   const startIdx = content.indexOf(startTag);
   const endIdx   = content.indexOf(endTag);
   if (startIdx !== -1 && endIdx !== -1) {
-    content = content.slice(0, startIdx) + startTag + newBlock + endTag + content.slice(endIdx + endTag.length);
+    content = content.slice(0, startIdx) + startTag + newBlock + (!newBlock.endsWith('\n') ? '\n' : '') + endTag + content.slice(endIdx + endTag.length);
   } else {
-    content += `\n${startTag}${newBlock}${endTag}`;
+    content += `\n${startTag}${newBlock}${!newBlock.endsWith('\n') ? '\n' : ''}${endTag}`;
   }
   fs.writeFileSync(filePath, content);
 }
@@ -71,9 +71,9 @@ function upsertExtensionBlock(filePath, tag, extLines) {
   const startIdx = content.indexOf(startTag);
   const endIdx   = content.indexOf(endTag);
   if (startIdx !== -1 && endIdx !== -1) {
-    content = content.slice(0, startIdx) + startTag + extLines + endTag + content.slice(endIdx + endTag.length);
+    content = content.slice(0, startIdx) + startTag + extLines + (!extLines.endsWith('\n') ? '\n' : '') + endTag + content.slice(endIdx + endTag.length);
   } else {
-    content += `\n${startTag}${extLines}${endTag}`;
+    content += `\n${startTag}${extLines}${!extLines.endsWith('\n') ? '\n' : ''}${endTag}`;
   }
   fs.writeFileSync(filePath, content);
 }
@@ -156,12 +156,14 @@ app.post("/agents/:agentId/extension", async (req, res) => {
     return res.status(404).json({ error: `Agent not found: ${agentId}`, detail: error?.message });
   }
 
-  // 2. Allocate extension number
-  let extensionNumber;
-  try {
-    extensionNumber = allocate();
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
+  // 2. Allocate or retrieve extension number
+  let extensionNumber = findByAgent(agentId);
+  if (!extensionNumber) {
+    try {
+      extensionNumber = allocate();
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
   }
 
   // Build SIP username from agentId (safe string)

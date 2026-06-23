@@ -46,7 +46,7 @@ services:
       - ./recordings:/usr/src/app/recordings
       - .env:/usr/src/app/.env
     ports:
-      - 80:6037
+      - 6037:6037
     networks:
       - avr
     labels:
