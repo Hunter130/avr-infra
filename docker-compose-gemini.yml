@@ -3,7 +3,7 @@ services:
     image: agentvoiceresponse/avr-core
     platform: linux/x86_64
     container_name: avr-core
-    restart: unless-stopped
+    restart: always
     environment:
       - PORT=5001 
       - HTTP_PORT=6001
@@ -17,7 +17,7 @@ services:
     build: ./avr-sts-gemini
     platform: linux/x86_64
     container_name: avr-sts-gemini
-    restart: unless-stopped
+    restart: always
     environment:
       - PORT=6037
       - GEMINI_API_KEY=$GEMINI_API_KEY
@@ -60,7 +60,7 @@ services:
     image: agentvoiceresponse/avr-asterisk
     platform: linux/x86_64
     container_name: avr-asterisk
-    restart: unless-stopped
+    restart: always
     ports:
       - 5038:5038
       - "5060:5060/tcp"
@@ -85,7 +85,7 @@ services:
     image: agentvoiceresponse/avr-ami
     platform: linux/x86_64
     container_name: avr-ami
-    restart: unless-stopped
+    restart: always
     environment:
       - PORT=6006
       - AMI_HOST=${AMI_HOST:-avr-asterisk}
@@ -101,7 +101,7 @@ services:
     build: ./agent-api
     platform: linux/x86_64
     container_name: agent-api
-    restart: unless-stopped
+    restart: always
     environment:
       - SUPABASE_URL=$SUPABASE_URL
       - SUPABASE_KEY=$SUPABASE_KEY
