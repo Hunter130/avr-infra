@@ -125,7 +125,7 @@ function reloadAsterisk() {
 function reloadGemini() {
   try {
     execSync(
-      `cd ${COMPOSE_DIR} && docker compose -f ${COMPOSE_FILE} up -d --no-deps avr-sts-gemini`,
+      `cd ${COMPOSE_DIR} && docker compose -p avr-infra -f ${COMPOSE_FILE} up -d --no-deps avr-sts-gemini`,
       { shell: "/bin/sh" }
     );
     console.log("avr-sts-gemini restarted");
