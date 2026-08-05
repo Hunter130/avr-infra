@@ -355,11 +355,13 @@ app.post("/agents/:agentId/call", async (req, res) => {
   const { agentId } = req.params;
   const { phoneNumber, extension, callerId, intento_seguimiento, historial_contexto, name } = req.body;
 
-  console.log(`[Call Originate] Agent ID: ${agentId}, Phone Number: ${phoneNumber}, Extension: ${extension}, Caller ID: ${callerId}, Name: ${name}, Intento: ${intento_seguimiento}, Context: ${historial_contexto}`);
-
   if (!phoneNumber) {
     return res.status(400).json({ error: "Missing phoneNumber in request body" });
   }
+
+  const cleanPhoneNumber = phoneNumber.replace(/^\+/, '').trim();
+
+  console.log(`[Call Originate] Agent ID: ${agentId}, Phone Number: ${cleanPhoneNumber}, Extension: ${extension}, Caller ID: ${callerId}, Name: ${name}, Intento: ${intento_seguimiento}, Context: ${historial_contexto}`);
 
   if (!extension) {
     return res.status(400).json({ error: "Missing extension in request body" });
@@ -389,7 +391,7 @@ app.post("/agents/:agentId/call", async (req, res) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phoneNumber,
+          phoneNumber: cleanPhoneNumber,
           agentId,
           direction: "outbound",
           customerName: name || "",
@@ -407,14 +409,14 @@ app.post("/agents/:agentId/call", async (req, res) => {
       console.error("Error registering call metadata on avr-sts-gemini:", err.message);
     }
 
-    const dialString = `${finalCallerId}*${phoneNumber}*${agentId}`;
-    const cmd = `docker exec -d ${ASTERISK_CONTAINER} asterisk -rx "channel originate Local/${dialString}@outbound-vonage extension ${extension}@demo variable __CALL_DIRECTION=outbound variable __CUSTOMER_NUMBER=${phoneNumber} variable __OUTBOUND_CALLERID=${finalCallerId}"`;
+    const dialString = `${finalCallerId}*${cleanPhoneNumber}*${agentId}`;
+    const cmd = `docker exec -d ${ASTERISK_CONTAINER} asterisk -rx "channel originate Local/${dialString}@outbound-vonage extension ${extension}@demo variable __CALL_DIRECTION=outbound variable __CUSTOMER_NUMBER=${cleanPhoneNumber} variable __OUTBOUND_CALLERID=${finalCallerId}"`;
     execSync(cmd);
     
     return res.status(202).json({
       success: true,
       message: "Call originated successfully",
-      phoneNumber,
+      phoneNumber: cleanPhoneNumber,
       extension,
       callerId: finalCallerId,
       name: name || null,
