@@ -370,6 +370,7 @@ app.post("/agents/:agentId/call", async (req, res) => {
     console.log(`[Call Originate] Extension ${extension} for agent ${agentId} is not configured in extensions_dynamic.conf. Generating extension...`);
     try {
       await generateAgentExtension(agentId, extension);
+      await new Promise(r => setTimeout(r, 1500));
     } catch (err) {
       console.error(`[Call Originate] Failed to generate extension for agent ${agentId}:`, err.message);
       return res.status(err.status || 500).json({
