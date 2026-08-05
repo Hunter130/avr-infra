@@ -124,13 +124,19 @@ function reloadAsterisk() {
 /** Restart avr-sts-gemini to pick up new agents.env */
 function reloadGemini() {
   try {
-    execSync(
-      `cd ${COMPOSE_DIR} && docker compose -p avr-infra -f ${COMPOSE_FILE} up -d --no-deps avr-sts-gemini`,
-      { shell: "/bin/sh" }
-    );
-    console.log("avr-sts-gemini restarted");
+    execSync("docker restart avr-sts-gemini");
+    console.log("avr-sts-gemini restarted via docker restart");
   } catch (e) {
-    console.error("Gemini restart error:", e.message);
+    console.warn("docker restart failed, trying docker compose fallback:", e.message);
+    try {
+      execSync(
+        `cd ${COMPOSE_DIR} && docker compose -p avr-infra -f ${COMPOSE_FILE} up -d --no-deps avr-sts-gemini`,
+        { shell: "/bin/sh" }
+      );
+      console.log("avr-sts-gemini restarted via docker compose fallback");
+    } catch (err) {
+      console.error("Gemini restart error:", err.message);
+    }
   }
 }
 
