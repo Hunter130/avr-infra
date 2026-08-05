@@ -143,12 +143,35 @@ function reloadGemini() {
 // ─── Routes ────────────────────────────────────────────────────────────────
 
 /**
- * POST /agents/:agentId/extension
- * Creates a SIP extension for the given agentId using data from Supabase.
+ * Checks if the agent's extension block exists in extensions_dynamic.conf.
+ * If extension parameter is provided, verifies that the specific extension is defined.
  */
-app.post("/agents/:agentId/extension", async (req, res) => {
-  const { agentId } = req.params;
+function isExtensionConfigured(agentId, extension) {
+  const extFile = path.join(DYNAMIC_DIR, "extensions_dynamic.conf");
+  if (!fs.existsSync(extFile)) return false;
 
+  const content = fs.readFileSync(extFile, "utf8");
+  const startTag = `; BEGIN:${agentId}\n`;
+  const endTag   = `; END:${agentId}\n`;
+  const startIdx = content.indexOf(startTag);
+  const endIdx   = content.indexOf(endTag);
+
+  if (startIdx === -1 || endIdx === -1) return false;
+
+  if (extension) {
+    const block = content.slice(startIdx + startTag.length, endIdx);
+    if (!block.includes(`exten => ${extension},`)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Internal logic to generate / update extension for an agent.
+ */
+async function generateAgentExtension(agentId, requestedExtension = null) {
   // 1. Fetch agent from Supabase
   const { data: agent, error } = await supabase
     .from(TABLE_NAME)
@@ -156,19 +179,24 @@ app.post("/agents/:agentId/extension", async (req, res) => {
     .eq("id", agentId)
     .single();
 
-  console.log(`[POST] agentId=${agentId} | data=${JSON.stringify(agent)} | error=${JSON.stringify(error)}`);
+  console.log(`[Extension Gen] agentId=${agentId} | data=${JSON.stringify(agent)} | error=${JSON.stringify(error)}`);
 
   if (error || !agent) {
-    return res.status(404).json({ error: `Agent not found: ${agentId}`, detail: error?.message });
+    const err = new Error(`Agent not found: ${agentId}`);
+    err.status = 404;
+    err.detail = error?.message;
+    throw err;
   }
 
   // 2. Allocate or retrieve extension number
   let extensionNumber = findByAgent(agentId);
   if (!extensionNumber) {
-    try {
+    if (requestedExtension) {
+      extensionNumber = parseInt(requestedExtension, 10);
+    } else if (agent.extension_number) {
+      extensionNumber = parseInt(agent.extension_number, 10);
+    } else {
       extensionNumber = allocate();
-    } catch (e) {
-      return res.status(500).json({ error: e.message });
     }
   }
 
@@ -204,7 +232,6 @@ app.post("/agents/:agentId/extension", async (req, res) => {
   );
 
   // 4. Update agents.env with per-agent Gemini vars
-  const safeId = agentId.replace(/-/g, "_");
   upsertAgentEnv(agentId, {
     VOICE:              agent.voice                  || "Kore",
     PROMPT:             (agent.prompt                || "").replace(/\n/g, "\\n"),
@@ -222,14 +249,14 @@ app.post("/agents/:agentId/extension", async (req, res) => {
     .eq("id", agentId);
 
   if (updateError) {
-    console.error(`[POST] Failed to update extension_number for agent ${agentId}:`, updateError.message);
+    console.error(`[Extension Gen] Failed to update extension_number for agent ${agentId}:`, updateError.message);
   }
 
   // 5. Reload Asterisk & Gemini
   reloadAsterisk();
   reloadGemini();
 
-  return res.json({
+  return {
     success: true,
     agentId,
     extensionNumber,
@@ -237,7 +264,26 @@ app.post("/agents/:agentId/extension", async (req, res) => {
     sipPassword,
     skill,
     message: "Extension created, Asterisk reloaded, Gemini restarted",
-  });
+  };
+}
+
+// ─── Routes ────────────────────────────────────────────────────────────────
+
+/**
+ * POST /agents/:agentId/extension
+ * Creates a SIP extension for the given agentId using data from Supabase.
+ */
+app.post("/agents/:agentId/extension", async (req, res) => {
+  const { agentId } = req.params;
+  try {
+    const result = await generateAgentExtension(agentId);
+    return res.json(result);
+  } catch (err) {
+    return res.status(err.status || 500).json({
+      error: err.message,
+      detail: err.detail
+    });
+  }
 });
 
 /**
@@ -317,6 +363,20 @@ app.post("/agents/:agentId/call", async (req, res) => {
 
   if (!extension) {
     return res.status(400).json({ error: "Missing extension in request body" });
+  }
+
+  // Ensure extension exists in extensions_dynamic.conf before originating outbound call
+  if (!isExtensionConfigured(agentId, extension)) {
+    console.log(`[Call Originate] Extension ${extension} for agent ${agentId} is not configured in extensions_dynamic.conf. Generating extension...`);
+    try {
+      await generateAgentExtension(agentId, extension);
+    } catch (err) {
+      console.error(`[Call Originate] Failed to generate extension for agent ${agentId}:`, err.message);
+      return res.status(err.status || 500).json({
+        error: "Failed to generate extension before originating call",
+        details: err.message
+      });
+    }
   }
 
   try {
