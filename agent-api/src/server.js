@@ -359,7 +359,7 @@ app.post("/agents/:agentId/call", async (req, res) => {
     return res.status(400).json({ error: "Missing phoneNumber in request body" });
   }
 
-  const cleanPhoneNumber = phoneNumber.replace(/^\+/, '').trim();
+  const cleanPhoneNumber = phoneNumber.startsWith('+') ? phoneNumber.trim() : '+' + phoneNumber.trim();
 
   console.log(`[Call Originate] Agent ID: ${agentId}, Phone Number: ${cleanPhoneNumber}, Extension: ${extension}, Caller ID: ${callerId}, Name: ${name}, Intento: ${intento_seguimiento}, Context: ${historial_contexto}`);
 
