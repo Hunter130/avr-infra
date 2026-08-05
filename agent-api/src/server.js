@@ -13,7 +13,7 @@ app.use(express.json());
 // ─── Config ────────────────────────────────────────────────────────────────
 const DYNAMIC_DIR = process.env.DYNAMIC_CONF_DIR || "/etc/asterisk/dynamic";
 const AGENTS_ENV_FILE = process.env.AGENTS_ENV_FILE || "/app/agents.env";
-const COMPOSE_FILE = process.env.COMPOSE_FILE || "docker-compose-gemini.yml";
+const COMPOSE_FILE = process.env.COMPOSE_FILE || "docker-compose.yml";
 const COMPOSE_DIR = process.env.COMPOSE_DIR || "/infra";
 const ASTERISK_CONTAINER = process.env.ASTERISK_CONTAINER || "avr-asterisk";
 const TABLE_NAME = "agentesID_Roda_IA";
