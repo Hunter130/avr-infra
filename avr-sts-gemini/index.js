@@ -312,19 +312,23 @@ const handleClientConnection = (clientWs, reqUrl) => {
         }
         startSilenceTimer();
       } else if (silenceStrikes >= 3) {
-        log("Silence strike limit reached (3 strikes). Hanging up call.");
+        log("Silence strike limit reached (3 strikes). Requesting Gemini goodbye and hangup.");
         if (session) {
           session.sendRealtimeInput({
-            text: "[Sistema: Despídete cordialmente porque el usuario no responde y luego cuelga la llamada inmediatamente usando la herramienta avr_hangup.]"
+            text: "[Sistema: El usuario no ha respondido tras varios avisos. Por favor, despídete cordialmente agradeciendo la atención prestada a la llamada y ejecuta inmediatamente la herramienta avr_hangup con la razón 'silence-timeout' para finalizar la llamada.]"
           });
         }
         endedReason = 'silence-timeout';
-        try {
-          const avrHangup = require('./avr_tools/avr_hangup');
-          await avrHangup.handler(sessionUuid, { reason: 'silence-timeout', action: 'avr_hangup' });
-        } catch (err) {
-          logError("Error executing avr_hangup on silence timeout:", err.message);
-        }
+        // Timer de seguridad/fallback de 8 segundos por si el modelo no ejecuta la herramienta tras despedirse
+        setTimeout(async () => {
+          try {
+            log("Safety fallback hangup triggered after Strike 3 silence timeout.");
+            const avrHangup = require('./avr_tools/avr_hangup');
+            await avrHangup.handler(sessionUuid, { reason: 'silence-timeout', action: 'avr_hangup' });
+          } catch (err) {
+            logError("Error executing fallback avr_hangup on silence timeout:", err.message);
+          }
+        }, 8000);
       }
     }, SILENCE_TIMEOUT_MS);
   }
