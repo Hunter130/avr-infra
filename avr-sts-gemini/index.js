@@ -72,17 +72,12 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
     // outputAudioTranscription: {}
   };
 
-  // Build realtimeInputConfig dynamically (Hardcoded VAD settings for direct testing)
-  const vadDisabled = false;
-  
-  // Opciones para startSensitivity: "START_SENSITIVITY_UNSPECIFIED", "START_SENSITIVITY_HIGH", "START_SENSITIVITY_LOW"
-  const startSensitivity = "START_SENSITIVITY_HIGH";
-  
-  // Opciones para endSensitivity: "END_SENSITIVITY_UNSPECIFIED", "END_SENSITIVITY_HIGH", "END_SENSITIVITY_LOW"
-  const endSensitivity = "END_SENSITIVITY_UNSPECIFIED";
-  
-  const silenceDurationMs = 400;
-  const prefixPaddingMs = 100;
+  // Build realtimeInputConfig dynamically from process.env
+  const vadDisabled = process.env.GEMINI_VAD_DISABLED === "true";
+  const startSensitivity = process.env.GEMINI_VAD_START_SENSITIVITY || "START_SENSITIVITY_HIGH";
+  const endSensitivity = process.env.GEMINI_VAD_END_SENSITIVITY || "END_SENSITIVITY_HIGH";
+  const silenceDurationMs = parseInt(process.env.GEMINI_VAD_SILENCE_DURATION_MS || "250", 10);
+  const prefixPaddingMs = parseInt(process.env.GEMINI_VAD_PREFIX_PADDING_MS || "100", 10);
 
   config.realtimeInputConfig = {
     automaticActivityDetection: {
@@ -261,7 +256,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
 
   log("New client WebSocket connection received, URL:", reqUrl);
 
-  let audioBuffer8k = [];
+  let audioBuffer8k = Buffer.alloc(0);
   let session = null;
   let lastUsageMetadata = null;
   let audioFrames = [];
@@ -292,7 +287,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
 
   /**
    * Processes Gemini audio chunks by downsampling and extracting frames.
-   * Converts 24kHz audio to 8kHz and extracts 20ms frames (160 samples).
+   * Converts 24kHz audio to 8kHz and extracts 20ms frames (160 samples = 320 bytes).
    *
    * @param {Buffer} inputBuffer - Raw audio buffer from Gemini
    * @returns {Buffer[]} Array of 20ms audio frames
@@ -309,17 +304,22 @@ const handleClientConnection = (clientWs, reqUrl) => {
     // Downsample from 24kHz to 8kHz using local downsampler
     const downsampledSamples = downsampler.full(inputSamples);
 
-    // Accumulate samples in buffer
-    audioBuffer8k = audioBuffer8k.concat(Array.from(downsampledSamples));
+    // Convert Int16Array output to Buffer
+    const downsampledBuffer = Buffer.from(
+      downsampledSamples.buffer,
+      downsampledSamples.byteOffset,
+      downsampledSamples.byteLength
+    );
+
+    // Accumulate in audioBuffer8k Buffer
+    audioBuffer8k = Buffer.concat([audioBuffer8k, downsampledBuffer]);
 
     // Extract 20ms frames (160 samples = 320 bytes)
     const audioFrames = [];
-    while (audioBuffer8k.length >= 160) {
-      const frame = audioBuffer8k.slice(0, 160);
-      audioBuffer8k = audioBuffer8k.slice(160);
-
-      // Convert to PCM16LE Buffer (320 bytes)
-      audioFrames.push(Buffer.from(Int16Array.from(frame).buffer));
+    while (audioBuffer8k.length >= 320) {
+      const frame = audioBuffer8k.subarray(0, 320);
+      audioBuffer8k = audioBuffer8k.subarray(320);
+      audioFrames.push(frame);
     }
 
     return audioFrames;
@@ -708,6 +708,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
             session.sendToolResponse({ functionResponses });
           } else if (message.serverContent?.interrupted) {
             log("Gemini Session Interruption");
+            audioBuffer8k = Buffer.alloc(0);
             audioFrames = [];
             clientWs.send(JSON.stringify({ type: "interruption" }));
           } else {
