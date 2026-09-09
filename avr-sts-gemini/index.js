@@ -27,6 +27,9 @@ const { loadTools, getToolHandler } = require("./loadTools");
 const callMap = new Map();
 const pendingCalls = new Map(); // uuid -> agentId mapping
 
+const SILENCE_TIMEOUT_MS = 10000;
+const MAX_SILENCE_STRIKES = 3;
+
 require("dotenv").config({ override: true });
 console.log("Loaded VAD Config from process.env:", {
   GEMINI_VAD_START_SENSITIVITY: process.env.GEMINI_VAD_START_SENSITIVITY,
@@ -151,7 +154,7 @@ const connectToGeminiSdk = async (sessionUuid, callbacks, agentOverrides = {}, s
     config.systemInstruction += `\n\n[SISTEMA]: IMPORTANTE. Para referencias de tiempo y reagendación de llamadas, la fecha y hora exacta actual es: ${horaMexico} (Hora de la Ciudad de México). Si el cliente te pide llamar en X minutos, debes calcular el ISO 8601 a partir de esta hora estricta.`;
 
     // Inject Global AMD (Answering Machine Detection) instructions
-    const amdInstruction = "\n\nCRITICAL RULE: Si escuchas palabras como 'buzón de voz', 'deja tu mensaje', o si escuchas el tono de un beep, no digas nada y ejecuta inmediatamente la herramienta para colgar la llamada con el parámetro action establecido en 'avr_hangup' para colgar la llamada.";
+    const amdInstruction = "\n\nCRITICAL RULE: Si escuchas palabras como 'buzón de voz', 'deja tu mensaje después del tono', o si escuchas el tono de un beep, no digas nada y ejecuta inmediatamente la herramienta para colgar la llamada con el parámetro action establecido en 'avr_hangup' para colgar la llamada. NUNCA cuelgues si escuchas ruidos de fondo, estática, clicks o silencios.";
     config.systemInstruction += amdInstruction;
 
     // Inject Session/Phone number context
@@ -275,7 +278,57 @@ const handleClientConnection = (clientWs, reqUrl) => {
   let agentOverrides = {}; // per-agent voice/prompt/costs
   let downsampler = null;
   let upsampler = null;
-  
+
+  let silenceStrikes = 0;
+  let silenceTimer = null;
+
+  function resetSilenceTimer(resetStrikes = false) {
+    if (silenceTimer) {
+      clearTimeout(silenceTimer);
+      silenceTimer = null;
+    }
+    if (resetStrikes) {
+      silenceStrikes = 0;
+    }
+  }
+
+  function startSilenceTimer() {
+    resetSilenceTimer(false);
+    silenceTimer = setTimeout(async () => {
+      silenceStrikes++;
+      log(`Silence timer triggered. Strike ${silenceStrikes}/${MAX_SILENCE_STRIKES}`);
+      if (silenceStrikes === 1) {
+        if (session) {
+          session.sendRealtimeInput({
+            text: "[Sistema: El usuario ha permanecido en silencio por más de 5 segundos. Por favor, reanuda la conversación de manera amable, recordando brevemente la última pregunta o preguntando si sigue ahí de forma muy corta. No saludes de nuevo.]"
+          });
+        }
+        startSilenceTimer();
+      } else if (silenceStrikes === 2) {
+        if (session) {
+          session.sendRealtimeInput({
+            text: "[Sistema: El usuario no ha hablado en los últimos 10 segundos. Pregunta brevemente si la llamada sigue conectada o si hay algún problema con el audio.]"
+          });
+        }
+        startSilenceTimer();
+      } else if (silenceStrikes >= 3) {
+        log("Silence strike limit reached (3 strikes). Hanging up call.");
+        if (session) {
+          session.sendRealtimeInput({
+            text: "[Sistema: Despídete cordialmente porque el usuario no responde y luego cuelga la llamada inmediatamente usando la herramienta avr_hangup.]"
+          });
+        }
+        endedReason = 'silence-timeout';
+        try {
+          const avrHangup = require('./avr_tools/avr_hangup');
+          await avrHangup.handler(sessionUuid, { reason: 'silence-timeout', action: 'avr_hangup' });
+        } catch (err) {
+          logError("Error executing avr_hangup on silence timeout:", err.message);
+        }
+      }
+    }, SILENCE_TIMEOUT_MS);
+  }
+
   // Parse from/to from WebSocket URL query
   let callFrom = "";
   let callTo = "";
@@ -427,6 +480,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
               try {
                 const dgMsg = JSON.parse(data);
                 if (dgMsg.is_final && dgMsg.channel?.alternatives?.[0]?.transcript) {
+                  resetSilenceTimer(true);
                   conversationLog.push(`Usuario: ${dgMsg.channel.alternatives[0].transcript}`);
                   log("Deepgram STT:", dgMsg.channel.alternatives[0].transcript);
                 }
@@ -506,7 +560,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
         systemInstruction += `\n\n[SISTEMA]: IMPORTANTE. Para referencias de tiempo y reagendación de llamadas, la fecha y hora exacta actual es: ${horaMexico} (Hora de la Ciudad de México). Si el cliente te pide llamar en X minutos, debes calcular el ISO 8601 a partir de esta hora estricta.`;
 
         // Inject Global AMD
-        const amdInstruction = "\n\nCRITICAL RULE: Si escuchas palabras como 'buzón de voz', 'deja tu mensaje', o si escuchas el tono de un beep, no digas nada y ejecuta inmediatamente la herramienta para colgar la llamada con el parámetro action establecido en 'avr_hangup' para colgar la llamada.";
+        const amdInstruction = "\n\nCRITICAL RULE: Si escuchas palabras como 'buzón de voz', 'deja tu mensaje después del tono', o si escuchas el tono de un beep, no digas nada y ejecuta inmediatamente la herramienta para colgar la llamada con el parámetro action establecido en 'avr_hangup' para colgar la llamada. NUNCA cuelgues si escuchas ruidos de fondo, estática, clicks o silencios.";
         systemInstruction += amdInstruction;
 
         // Inject Session/Phone number context
@@ -621,6 +675,15 @@ const handleClientConnection = (clientWs, reqUrl) => {
             lastUsageMetadata = message.usageMetadata;
             log(`[${sessionUuid}] usageMetadata recibido: TotalTokens=${message.usageMetadata.totalTokenCount}`);
           }
+          if (message.serverContent?.turnComplete) {
+            startSilenceTimer();
+          }
+          if (message.serverContent?.inputTranscription) {
+            resetSilenceTimer(true);
+          }
+          if (message.serverContent?.modelTurn) {
+            resetSilenceTimer(false);
+          }
           if (message.serverContent?.outputTranscription) {
             const text = message.serverContent.outputTranscription.text;
             // Deduplicate fast consecutive identical chunks
@@ -708,6 +771,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
 
             session.sendToolResponse({ functionResponses });
           } else if (message.serverContent?.interrupted) {
+            resetSilenceTimer(true);
             log("Gemini Session Interruption");
             audioBuffer8k = Buffer.alloc(0);
             audioFrames = [];
@@ -768,6 +832,7 @@ const handleClientConnection = (clientWs, reqUrl) => {
    * Cleans up resources and closes connections.
    */
   async function cleanup() {
+    resetSilenceTimer(true);
     if (session) session.close();
     if (clientWs) clientWs.close();
     if (deepgramWs) deepgramWs.close();
