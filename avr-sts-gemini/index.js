@@ -304,11 +304,12 @@ const handleClientConnection = (clientWs, reqUrl) => {
     // Downsample from 24kHz to 8kHz using local downsampler
     const downsampledSamples = downsampler.full(inputSamples);
 
-    // Convert Int16Array output to Buffer
+    // Convert resampled samples to 16-bit PCM Int16Array and Buffer
+    const pcm16Samples = Int16Array.from(downsampledSamples);
     const downsampledBuffer = Buffer.from(
-      downsampledSamples.buffer,
-      downsampledSamples.byteOffset,
-      downsampledSamples.byteLength
+      pcm16Samples.buffer,
+      pcm16Samples.byteOffset,
+      pcm16Samples.byteLength
     );
 
     // Accumulate in audioBuffer8k Buffer
